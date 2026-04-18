@@ -1,12 +1,16 @@
 """Funder matcher for the Deutsche Forschungsgemeinschaft (DFG)."""
 
 import re
+from pathlib import Path
 
+from .._award import AwardDetailsResult
 from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "dfg"
 FUNDER_DISPLAY_NAME: str = "Deutsche Forschungsgemeinschaft"
+FUNDER_ALTERNATE_IDS: tuple[str, ...] = ("dfg",)
+FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("German Research Foundation",)
 
 # Distinctive DFG programme codes only. Purely numeric GEPRIS project IDs
 # are intentionally not matched here because they overlap with NSF/NSFC/
@@ -21,6 +25,18 @@ _DFG_RE = re.compile(
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
     return bool(_DFG_RE.search(s))
+
+
+def extract_award_ids(text: str) -> list[str]:
+    raise NotImplementedError
+
+
+def get_award_details(
+    award_ids: list[str],
+    cache_dir: Path,
+    force_refresh: bool,
+) -> AwardDetailsResult:
+    raise NotImplementedError
 
 
 EXAMPLES = FunderExamples(

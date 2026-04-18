@@ -1,12 +1,16 @@
 """Funder matcher for the National Natural Science Foundation of China (NSFC)."""
 
 import re
+from pathlib import Path
 
+from .._award import AwardDetailsResult
 from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "nsfc"
 FUNDER_DISPLAY_NAME: str = "National Natural Science Foundation of China"
+FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
+FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ()
 
 _NSFC_NUMERIC_RE = re.compile(r"\b\d{7,11}\b")
 _NSFC_JOINT_FUND_RE = re.compile(r"\bU\d{7,8}\b")
@@ -15,6 +19,18 @@ _NSFC_JOINT_FUND_RE = re.compile(r"\bU\d{7,8}\b")
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
     return bool(_NSFC_NUMERIC_RE.search(s) or _NSFC_JOINT_FUND_RE.search(s))
+
+
+def extract_award_ids(text: str) -> list[str]:
+    raise NotImplementedError
+
+
+def get_award_details(
+    award_ids: list[str],
+    cache_dir: Path,
+    force_refresh: bool,
+) -> AwardDetailsResult:
+    raise NotImplementedError
 
 
 EXAMPLES = FunderExamples(

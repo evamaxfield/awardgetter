@@ -1,12 +1,16 @@
 """Funder matcher for the French Agence Nationale de la Recherche (ANR)."""
 
 import re
+from pathlib import Path
 
+from .._award import AwardDetailsResult
 from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "anr"
 FUNDER_DISPLAY_NAME: str = "Agence Nationale de la Recherche"
+FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
+FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("Agence nationale de la recherche",)
 
 # Standard ANR reference: ANR-YY-XXXX-NNNN(-S), where XXXX is a 2-6 char
 # programme code (CE##, JCJC, MRSEI, MPGA, LABX, EQPX, IDEX, INBS, NEUC,
@@ -24,6 +28,18 @@ _ANR_NO_PREFIX_RE = re.compile(
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
     return bool(_ANR_WITH_PREFIX_RE.search(s) or _ANR_NO_PREFIX_RE.search(s))
+
+
+def extract_award_ids(text: str) -> list[str]:
+    raise NotImplementedError
+
+
+def get_award_details(
+    award_ids: list[str],
+    cache_dir: Path,
+    force_refresh: bool,
+) -> AwardDetailsResult:
+    raise NotImplementedError
 
 
 EXAMPLES = FunderExamples(

@@ -1,12 +1,16 @@
 """Funder matcher for China's National Key Research and Development Program (NKRDP)."""
 
 import re
+from pathlib import Path
 
+from .._award import AwardDetailsResult
 from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "nkrdp"
 FUNDER_DISPLAY_NAME: str = "National Key Research and Development Program of China"
+FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
+FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ()
 
 # YYYY + programme code (YFA-YFF, ZD, AAA, QN[RC]) + sequential digits
 _NKRDP_RE = re.compile(r"\b\d{4}(?:YF[A-F]|ZD|AAA|QN[A-Z]*)\d+\b")
@@ -15,6 +19,18 @@ _NKRDP_RE = re.compile(r"\b\d{4}(?:YF[A-F]|ZD|AAA|QN[A-Z]*)\d+\b")
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
     return bool(_NKRDP_RE.search(s))
+
+
+def extract_award_ids(text: str) -> list[str]:
+    raise NotImplementedError
+
+
+def get_award_details(
+    award_ids: list[str],
+    cache_dir: Path,
+    force_refresh: bool,
+) -> AwardDetailsResult:
+    raise NotImplementedError
 
 
 EXAMPLES = FunderExamples(
