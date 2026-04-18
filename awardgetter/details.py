@@ -62,9 +62,7 @@ def get_award_details(
     mod = _FUNDER_LOOKUP.get(funder.casefold())
     if mod is None:
         supported = sorted({m.FUNDER_ID for m in ALL_DETAIL_FUNDERS})
-        raise ValueError(
-            f"Unknown funder {funder!r}. Supported funder IDs: {supported}"
-        )
+        raise ValueError(f"Unknown funder {funder!r}. Supported funder IDs: {supported}")
 
     resolved_cache_dir = cache_dir if cache_dir is not None else _DEFAULT_CACHE_DIR
 
