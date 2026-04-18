@@ -29,6 +29,10 @@ install:
 lint:
 	prek run --all-files
 
+# run tests
+test:
+	pytest .
+
 ###############################################################################
 # Release and versioning
 

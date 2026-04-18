@@ -2,6 +2,7 @@
 
 import re
 
+from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "anr"
@@ -23,3 +24,50 @@ _ANR_NO_PREFIX_RE = re.compile(
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
     return bool(_ANR_WITH_PREFIX_RE.search(s) or _ANR_NO_PREFIX_RE.search(s))
+
+
+EXAMPLES = FunderExamples(
+    funder_id=FUNDER_ID,
+    display_name=FUNDER_DISPLAY_NAME,
+    source="plans/anr_spec.md",
+    positive=(
+        # Standard ANR competitive grants (DGDS) — `ANR-YY-CExx-NNNN[-S]`.
+        "ANR-21-CE29-0003",
+        "ANR-17-CE32-0006",
+        "ANR-19-CE39-0007",
+        "ANR-17-CE23-0012",
+        "ANR-19-CE45-0010",
+        "ANR-21-CE23-0006",
+        "ANR-19-NEUC-0004",
+        "ANR-18-CE40-0005",
+        # PIA / France 2030 grants — `ANR-YY-PROG-NNNN[-S]`.
+        "ANR-10-LABX-12-0",
+        "ANR-10-LABX-24",
+        "ANR-10-EQPX-29-0",
+        "ANR-10-EQPX-03",
+        "ANR-11-INBS-0013",
+        "ANR-10-INBS-09-08",
+        # No-prefix forms seen in acknowledgements.
+        "10-INBS-09-08",
+        "16-IDEX-0004",
+        "20-PCPA-0010",
+        # Multi-grant strings: a single hit anywhere in the text is sufficient.
+        "ANR-10-EQPX-03 (Equipex) and ANR-10-INBS-09-08 (France Genomique Consortium)",
+        "ANR GraVa ANR-18-CE40-0005",
+    ),
+    negative=(
+        # Acronym-only references — not resolvable as ANR IDs.
+        "CogFinAIgent",
+        "OceaniX",
+        # Truncated reference (no project number).
+        "ANR-17-MPGA-",
+        # Informal spacing — the current matcher does not normalise whitespace.
+        "ANR10 LABX56",
+        # Cross-funder distractors.
+        "EP/S00923X/1",
+        "DE-SC0021358",
+        "62206216",
+        "2022ZD0160401",
+        "R01HL123456",
+    ),
+)

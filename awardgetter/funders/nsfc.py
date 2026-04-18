@@ -2,6 +2,7 @@
 
 import re
 
+from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "nsfc"
@@ -14,3 +15,43 @@ _NSFC_JOINT_FUND_RE = re.compile(r"\bU\d{7,8}\b")
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
     return bool(_NSFC_NUMERIC_RE.search(s) or _NSFC_JOINT_FUND_RE.search(s))
+
+
+EXAMPLES = FunderExamples(
+    funder_id=FUNDER_ID,
+    display_name=FUNDER_DISPLAY_NAME,
+    source="plans/nsfc_scraper_spec.md",
+    positive=(
+        # Standard 8-digit NSFC numbers.
+        "62206216",
+        "91949120",
+        "62432006",
+        "12202470",
+        "62141608",
+        "11871183",
+        "51501088",
+        "61933003",
+        # 11-digit international cooperation IDs.
+        "61661146007",
+        "61711540303",
+        # Joint Fund (U-prefix).
+        "U1936210",
+        # Hyphenated form: numeric prefix is matched even with sub-task suffix.
+        "20221279-ZKT03",
+    ),
+    negative=(
+        # Municipal / provincial funds. The internal letter-digit junctions
+        # have no word boundary, so the digit run is never matched.
+        "JCYJ20210324120011032",
+        "YDZX20233100001001",
+        # Too few digits.
+        "131060",
+        "132002",
+        # MoST Key R&D Programme — has letters between digit groups, so the
+        # numeric portions never have word boundaries on both sides.
+        "2021ZD0201405",
+        # Cross-funder distractors.
+        "EP/S00923X/1",
+        "ANR-21-CE29-0003",
+    ),
+)

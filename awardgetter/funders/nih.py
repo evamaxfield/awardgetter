@@ -2,6 +2,7 @@
 
 import re
 
+from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "nih"
@@ -40,3 +41,31 @@ def check_award_id(text: str) -> bool:
     s = _NIH_AGENCY_WORDS_RE.sub(" ", s)
     s = _NIH_SUPPL_RE.sub(" ", s)
     return bool(_NIH_CORE_PATTERN.search(s))
+
+
+EXAMPLES = FunderExamples(
+    funder_id=FUNDER_ID,
+    display_name=FUNDER_DISPLAY_NAME,
+    source="awardgetter/funders/nih.py (no plan file)",
+    positive=(
+        # Canonical project numbers: optional application-type digit, activity
+        # code, institute code, serial, optional support-year suffix.
+        "R01HL123456",
+        "R21CA098765",
+        "T32GM007347",
+        "5R01HL123456-05",
+        "1R01HL123456-01A1",
+        # NIH agency word and bracketed text are stripped before matching.
+        "[NIH] R01HL123456",
+        "NIH R01HL123456",
+        # Internal whitespace within the project number is tolerated.
+        "R01 HL 123456",
+    ),
+    negative=(
+        "EP/S00923X/1",
+        "ANR-21-CE29-0003",
+        "2022ZD0160401",
+        "DFG SFB1114",
+        "12345",
+    ),
+)

@@ -2,7 +2,7 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from ._spec import FunderModule
+from ._spec import FunderExamples, FunderModule
 from .match import find_matching_funders
 
 try:
@@ -13,4 +13,4 @@ except PackageNotFoundError:
 __author__ = "Eva Maxfield Brown"
 __email__ = "evamaxfieldbrown@gmail.com"
 
-__all__ = ["FunderModule", "__version__", "find_matching_funders"]
+__all__ = ["FunderExamples", "FunderModule", "__version__", "find_matching_funders"]
