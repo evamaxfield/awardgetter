@@ -100,5 +100,10 @@ lint.extend-ignore = [
 "**/tests/*.py" = ["D"]
 "**/migrations/*.py" = ["D"]
 
+[tool.pytest.ini_options]
+markers = [
+    "network: tests that require network access (APIs or bulk-CSV downloads)",
+]
+
 [tool.pyrefly]
 project-excludes = [".github", ".pre-commit-config.yaml", "pyproject.toml"]

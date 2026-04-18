@@ -35,6 +35,7 @@ FUNDER_ALTERNATE_NAMES: tuple[str, ...] = (
 )
 
 _UKRI_RE = re.compile(r"\b(?:EP|MR|BB|NE|ES|AH|ST|GR)/[A-Z0-9]{6,9}(?:/\d+)?\b")
+_UKRI_NUMERIC_RE = re.compile(r"\b\d{7}\b")
 
 _GTR_API_URL = "https://gtr.ukri.org/api/projects?ref={ref}"
 _GTR_RATE_LIMIT_SLEEP = 1.0
@@ -65,11 +66,12 @@ def _parse_gtr_date(value: str | int | None) -> date | None:
 
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
-    return bool(_UKRI_RE.search(s))
+    return bool(_UKRI_RE.search(s) or _UKRI_NUMERIC_RE.search(s))
 
 
 def extract_award_ids(text: str) -> list[str]:
-    return _UKRI_RE.findall(normalize_dashes(text))
+    s = normalize_dashes(text)
+    return _UKRI_RE.findall(s) + _UKRI_NUMERIC_RE.findall(s)
 
 
 def get_award_details(
@@ -136,7 +138,7 @@ def get_award_details(
 
         data = resp.json()
         try:
-            project = data["projectComposition"]["project"]
+            project = data["projectOverview"]["projectComposition"]["project"]
             fund = project["fund"]
             amount_raw = fund.get("valuePounds")
             amount = float(amount_raw) if amount_raw is not None else None
@@ -172,18 +174,17 @@ EXAMPLES = FunderExamples(
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/epsrc_gtr_spec.md",
     positive=(
-        # Standard EPSRC references with `/N` suffix.
-        "EP/S00923X/1",
+        # Standard EPSRC/UKRI references with `/N` suffix.
         "EP/I013067/1",
         "EP/P020259/1",
-        "EP/S022961/1",
+        "EP/D05592X/1",
         "EP/V002856/1",
         "EP/M025179/1",
-        # Incomplete — missing trailing `/N`.
-        "EP/L01663X",
-        "EP/L016508",
-        # Trailing-slash and trailing-paren tolerated by the word-boundary regex.
-        "EP/R513295/",
+        # MRC reference — also matched by the UKRI council-prefix pattern.
+        "MR/R001154/1",
+        # Pure numeric GtR project ID (overlaps with NSF by design).
+        "2882321",
+        # Trailing-paren tolerated by the word-boundary regex.
         "EP/P020259/1)",
         # Embedded in surrounding text or multi-grant strings.
         "MVSE EP/V002856/1",

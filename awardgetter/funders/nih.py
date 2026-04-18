@@ -170,7 +170,7 @@ def check_award_id(text: str) -> bool:
 
 def extract_award_ids(text: str) -> list[str]:
     matches = _NIH_CORE_PATTERN.findall(_normalize(text))
-    return [re.sub(r"[-\s]+", "", m).upper() for m in matches]
+    return [re.sub(r"[-\s]+", "", _base_project_num(m)) for m in matches]
 
 
 def get_award_details(
@@ -239,18 +239,18 @@ EXAMPLES = FunderExamples(
     display_name=FUNDER_DISPLAY_NAME,
     source="awardgetter/funders/nih.py (no plan file)",
     positive=(
-        # Canonical project numbers: optional application-type digit, activity
-        # code, institute code, serial, optional support-year suffix.
-        "R01HL123456",
-        "R21CA098765",
+        # Canonical project numbers: activity code, institute code, serial.
+        "U24NS124001",
+        "U24CA086368",
         "T32GM007347",
-        "5R01HL123456-05",
-        "1R01HL123456-01A1",
+        # With application-type digit and support-year suffix.
+        "5U24NS124001-05",
+        "5U24CA086368-25",
         # NIH agency word and bracketed text are stripped before matching.
-        "[NIH] R01HL123456",
-        "NIH R01HL123456",
+        "[NIH] U24NS124001",
+        "NIH U24NS124001",
         # Internal whitespace within the project number is tolerated.
-        "R01 HL 123456",
+        "U24 NS 124001",
     ),
     negative=(
         "EP/S00923X/1",

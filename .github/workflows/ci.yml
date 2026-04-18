@@ -50,7 +50,7 @@ jobs:
         python -m pip install --upgrade pip uv
         uv venv
         source .venv/bin/activate
-        uv pip install .[test]
+        just install
     - name: Run Tests
       run: |
         source .venv/bin/activate

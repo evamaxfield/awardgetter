@@ -20,7 +20,7 @@ _DIGIT_SEPARATOR_DIGIT_RE = re.compile(r"(\d)[\s\-]+(\d)")
 _NSF_AWARD_ID_RE = re.compile(r"\b\d{7}\b")
 
 _NSF_API_URL = (
-    "https://api.nsf.gov/services/v2/awards.json"
+    "https://api.nsf.gov/services/v1/awards.json"
     "?id={award_id}&printFields=id,fundsObligatedAmt,startDate,expDate"
 )
 
@@ -130,15 +130,15 @@ EXAMPLES = FunderExamples(
     source="awardgetter/funders/nsf.py (no plan file)",
     positive=(
         # Bare 7-digit NSF award IDs.
-        "2034901",
-        "1956322",
+        "1728743",
+        "2211275",
         # NSF agency word is stripped, then 7-digit match.
-        "NSF-1956322",
-        "NSF 2034901",
+        "NSF-2211275",
+        "NSF 1728743",
         # Generic surrounding text.
-        "Award #1956322",
+        "Award #2211275",
         # Internal whitespace within the 7 digits is collapsed.
-        "NSF 19 56322",
+        "NSF 22 11275",
     ),
     negative=(
         # Wrong digit counts.
