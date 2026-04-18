@@ -31,7 +31,7 @@ lint:
 
 # run tests
 test:
-	pytest .
+	pytest . --no-flaky-report
 
 ###############################################################################
 # Release and versioning

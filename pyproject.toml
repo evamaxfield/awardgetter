@@ -35,6 +35,7 @@ dependencies = [
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
 dev = [
+  "flaky>=3.8",
   "prek>=0.3",
   "pytest>=9",
 ]

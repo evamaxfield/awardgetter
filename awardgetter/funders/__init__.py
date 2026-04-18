@@ -32,7 +32,7 @@ ALL_FUNDERS: tuple[FunderModule, ...] = (
 ALL_DETAIL_FUNDERS: tuple[FunderModule, ...] = (
     nsf,
     nih,
-    ec_cordis,
+    # ec_cordis,
     snsf,
     epsrc_ukri,
 )

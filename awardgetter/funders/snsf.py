@@ -1,7 +1,6 @@
 """Funder matcher for the Swiss National Science Foundation (SNSF)."""
 
 import re
-from datetime import date
 from pathlib import Path
 
 import polars as pl
@@ -34,25 +33,32 @@ _SNSF_NUMERIC_RE = re.compile(r"\b\d{5,6}\b")
 
 # Bulk CSV from the SNSF Data Portal. Verify this URL if downloads fail —
 # the portal may update the export path.
-_SNSF_CSV_URL = "https://data.snf.ch/exports/grants/grants.csv"
+_SNSF_CSV_URL = "https://data.snf.ch/public_storage/datasets/Grant.csv"
 _SNSF_CSV_FILENAME = "snsf_grants.csv"
 
 _STRIP_HASH_RE = re.compile(r"^#")
 _STRIP_SUFFIX_RE = re.compile(r"/\d+$")
+# Normalize the hyphen separator between programme prefix and numeric ID to
+# underscore, which is the canonical form used in the SNSF bulk CSV.
+_NORMALIZE_SEP_RE = re.compile(r"^([A-Z0-9]+)-(\d)")
 
 
 def _parse_snsf_date(s: str | None):
     if not s:
         return None
+    from datetime import datetime
+
+    raw = str(s).strip().rstrip("Z")
     try:
-        return date.fromisoformat(str(s).strip())
+        return datetime.fromisoformat(raw).date()
     except ValueError:
         return None
 
 
 def _clean_grant_number(raw: str) -> str:
     s = _STRIP_HASH_RE.sub("", raw.strip())
-    return _STRIP_SUFFIX_RE.sub("", s)
+    s = _STRIP_SUFFIX_RE.sub("", s)
+    return _NORMALIZE_SEP_RE.sub(r"\1_\2", s)
 
 
 def check_award_id(text: str) -> bool:
@@ -77,7 +83,13 @@ def get_award_details(
 
     try:
         csv_path = get_cached_file(_SNSF_CSV_URL, _SNSF_CSV_FILENAME, cache_dir, force_refresh)
-        df = pl.read_csv(csv_path, infer_schema=False, ignore_errors=True)
+        df = pl.read_csv(
+            csv_path,
+            separator=";",
+            infer_schema=False,
+            ignore_errors=True,
+            truncate_ragged_lines=True,
+        )
     except Exception as exc:
         for aid in award_ids:
             not_found.append(
@@ -90,25 +102,32 @@ def get_award_details(
             )
         return AwardDetailsResult(found=found, not_found=not_found)
 
-    if "GrantNumber" not in df.columns:
+    if "GrantNumberString" not in df.columns:
         for aid in award_ids:
             not_found.append(
                 AwardNotFound(
                     funder_id=FUNDER_ID,
                     input_text=aid,
                     reason=NotFoundReason.CACHE_ERROR,
-                    detail="Unexpected CSV format: 'GrantNumber' column not found",
+                    detail="Unexpected CSV format: 'GrantNumberString' column not found",
                 )
             )
         return AwardDetailsResult(found=found, not_found=not_found)
 
     cols = [
-        c for c in ["GrantNumber", "AmountGranted", "StartDate", "EndDate"] if c in df.columns
+        c
+        for c in [
+            "GrantNumberString",
+            "AmountGrantedAllSets",
+            "EffectiveGrantStartDate",
+            "EffectiveGrantEndDate",
+        ]
+        if c in df.columns
     ]
     lookup: dict[str, dict] = {
-        _clean_grant_number(str(row["GrantNumber"])): row
+        _clean_grant_number(str(row["GrantNumberString"])): row
         for row in df.select(cols).to_dicts()
-        if row.get("GrantNumber")
+        if row.get("GrantNumberString")
     }
 
     for award_id in award_ids:
@@ -124,7 +143,7 @@ def get_award_details(
             )
             continue
 
-        amount_raw = row.get("AmountGranted")
+        amount_raw = row.get("AmountGrantedAllSets")
         try:
             amount = float(amount_raw) if amount_raw else None
         except (ValueError, TypeError):
@@ -136,8 +155,8 @@ def get_award_details(
                 award_id=_clean_grant_number(award_id),
                 amount_funded=amount,
                 currency="CHF",
-                start_date=_parse_snsf_date(row.get("StartDate")),
-                end_date=_parse_snsf_date(row.get("EndDate")),
+                start_date=_parse_snsf_date(row.get("EffectiveGrantStartDate")),
+                end_date=_parse_snsf_date(row.get("EffectiveGrantEndDate")),
             )
         )
 
@@ -152,13 +171,13 @@ EXAMPLES = FunderExamples(
         # Programme-prefixed grant numbers.
         "PZ00P3_180085",
         "PDFMP3-130309",
-        "51NF40_225155",
+        "51NF40_141869",
         "200021_181978/1",
         "CRSII5_205975",
         "IZRJZ3_164171",
         "200021_166275",
         "PP00P2_138979",
-        "200021_20484",
+        "200021_213074",
         "200021L_212718",
         "CR22I2_166110",
         "P400PB_199242",

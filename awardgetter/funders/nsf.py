@@ -51,7 +51,7 @@ def get_award_details(
         try:
             resp = requests.get(
                 _NSF_API_URL.format(award_id=award_id),
-                timeout=30,
+                timeout=3,
             )
         except requests.exceptions.RequestException as exc:
             not_found.append(

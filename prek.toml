@@ -13,5 +13,8 @@ hooks = [
 repo = "https://github.com/facebook/pyrefly-pre-commit"
 rev = "0.61.0" # Pyrefly pre-commit hook version.
 hooks = [
-  { id = "pyrefly-check", pass_filenames = false, additional_dependencies = ["pytest>=9", "requests>=2.28", "polars>=1"] },
+  {
+    id = "pyrefly-check",
+    pass_filenames = false,
+    additional_dependencies = ["pytest>=9", "requests>=2.28", "polars>=1", "flaky>=3"] },
 ]
