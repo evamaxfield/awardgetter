@@ -1,5 +1,6 @@
 """Top-level dispatcher that asks every registered funder whether an
-award-id string could plausibly be theirs."""
+award-id string could plausibly be theirs.
+"""
 
 from .funders import ALL_FUNDERS
 
