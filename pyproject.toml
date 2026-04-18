@@ -31,8 +31,9 @@ dependencies = []
 # extra dependencies
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
-lint = [
+dev = [
   "prek>=0.3",
+  "pytest>=9",
 ]
 
 [project.urls]

@@ -22,7 +22,7 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: "3.14"
-    - uses: extractions/setup-just@v3
+    - uses: extractions/setup-just@v4
     - name: Install Dependencies
       run: |
         python -m pip install --upgrade pip uv
@@ -35,26 +35,26 @@ jobs:
         just lint
 
   # Run tests
-  # test:
-  #   runs-on: ubuntu-latest
+  test:
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #   - uses: actions/checkout@v6
-  #   - name: Set up Python
-  #     uses: actions/setup-python@v6
-  #     with:
-  #       python-version: "3.14"
-  #   - uses: extractions/setup-just@v3
-  #   - name: Install Dependencies
-  #     run: |
-  #       python -m pip install --upgrade pip uv
-  #       uv venv
-  #       source .venv/bin/activate
-  #       uv pip install .[test]
-  #   - name: Run Tests
-  #     run: |
-  #       source .venv/bin/activate
-  #       just test
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.14"
+    - uses: extractions/setup-just@v4
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip uv
+        uv venv
+        source .venv/bin/activate
+        uv pip install .[test]
+    - name: Run Tests
+      run: |
+        source .venv/bin/activate
+        just test
 
   # # Publish to pypi
   # publish:

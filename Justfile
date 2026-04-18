@@ -23,7 +23,7 @@ clean:
 # install with all deps
 install:
 	pip install uv
-	uv pip install -e ".[lint,modeling]"
+	uv pip install -e ".[dev]"
 
 # run linting
 lint:
