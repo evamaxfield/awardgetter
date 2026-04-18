@@ -27,16 +27,16 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-  "beautifulsoup4>=4.12",
+  "beautifulsoup4>=4",
   "polars>=1",
-  "requests>=2.28",
+  "requests>=2",
 ]
 
 # extra dependencies
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
 dev = [
-  "flaky>=3.8",
+  "flaky>=3",
   "prek>=0.3",
   "pytest>=9",
 ]
