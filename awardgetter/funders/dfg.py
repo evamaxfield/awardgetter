@@ -1,9 +1,15 @@
 """Funder matcher for the Deutsche Forschungsgemeinschaft (DFG)."""
 
+import random
 import re
+import time
+from datetime import date
 from pathlib import Path
 
-from .._award import AwardDetailsResult
+import requests
+from bs4 import BeautifulSoup
+
+from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
@@ -21,6 +27,19 @@ _DFG_RE = re.compile(
     re.IGNORECASE,
 )
 
+# 7-9 digit GEPRIS numeric project IDs embedded alongside programme codes.
+_GEPRIS_EMBEDDED_RE = re.compile(r"\b(\d{7,9})\b")
+
+# Matches a pure GEPRIS numeric ID (what extract_award_ids returns for embedded IDs).
+_GEPRIS_NUMERIC_RE = re.compile(r"^\d{7,9}$")
+
+_GEPRIS_BASE_URL = "https://gepris.dfg.de/gepris/projekt"
+_GEPRIS_SEARCH_URL = "https://gepris.dfg.de/gepris/OCTOPUS"
+
+_TERM_FROM_TO_RE = re.compile(r"Term from (\d{4}) to (\d{4})", re.IGNORECASE)
+_TERM_SINCE_RE = re.compile(r"Term since (\d{4})", re.IGNORECASE)
+_PROG_NUM_RE = re.compile(r"\d+")
+
 
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
@@ -28,7 +47,111 @@ def check_award_id(text: str) -> bool:
 
 
 def extract_award_ids(text: str) -> list[str]:
-    raise NotImplementedError
+    s = normalize_dashes(text)
+    seen: set[str] = set()
+    results: list[str] = []
+
+    for prog_match in _DFG_RE.finditer(s):
+        ctx_start = max(0, prog_match.start() - 60)
+        ctx_end = min(len(s), prog_match.end() + 60)
+        context = s[ctx_start:ctx_end]
+
+        prog_num_m = _PROG_NUM_RE.search(prog_match.group())
+        prog_num = prog_num_m.group() if prog_num_m else ""
+
+        gepris_ids = [
+            n for n in _GEPRIS_EMBEDDED_RE.findall(context) if n != prog_num and len(n) >= 7
+        ]
+
+        if gepris_ids:
+            for gid in gepris_ids:
+                if gid not in seen:
+                    seen.add(gid)
+                    results.append(gid)
+        else:
+            prog_code = re.sub(r"\s+", "", prog_match.group().strip().upper())
+            if prog_code not in seen:
+                seen.add(prog_code)
+                results.append(prog_code)
+
+    return results
+
+
+def _make_session() -> requests.Session:
+    session = requests.Session()
+    session.headers["User-Agent"] = (
+        "Mozilla/5.0 (compatible; awardgetter; +https://github.com/evamaxfield/awardgetter)"
+    )
+    return session
+
+
+def _fetch_gepris_project(
+    session: requests.Session, gepris_id: str
+) -> tuple[AwardDetails | None, str | None]:
+    url = f"{_GEPRIS_BASE_URL}/{gepris_id}?language=en"
+    try:
+        resp = session.get(url, timeout=15)
+    except requests.exceptions.RequestException as exc:
+        return None, str(exc)
+
+    if resp.status_code == 404:
+        return None, "not_found"
+    if not resp.ok:
+        return None, f"HTTP {resp.status_code}"
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    page_text = soup.get_text(" ", strip=True)
+
+    start_year: int | None = None
+    end_year: int | None = None
+
+    m = _TERM_FROM_TO_RE.search(page_text)
+    if m:
+        start_year = int(m.group(1))
+        end_year = int(m.group(2))
+    else:
+        m = _TERM_SINCE_RE.search(page_text)
+        if m:
+            start_year = int(m.group(1))
+
+    return (
+        AwardDetails(
+            funder_id=FUNDER_ID,
+            award_id=gepris_id,
+            amount_funded=None,
+            currency="EUR",
+            start_date=date(start_year, 1, 1) if start_year else None,
+            end_date=date(end_year, 12, 31) if end_year else None,
+        ),
+        None,
+    )
+
+
+def _search_gepris_for_programme(session: requests.Session, programme_code: str) -> str | None:
+    query = re.sub(r"([A-Z]+)(\d+)", r"\1 \2", programme_code)
+    try:
+        resp = session.get(
+            _GEPRIS_SEARCH_URL,
+            params={
+                "task": "showSearchSimple",
+                "context": "projekt",
+                "keywords": query,
+                "language": "en",
+            },
+            timeout=15,
+        )
+    except requests.exceptions.RequestException:
+        return None
+
+    if not resp.ok:
+        return None
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    link = soup.find("a", href=re.compile(r"/gepris/projekt/\d+"))
+    if not link:
+        return None
+    m = re.search(r"/gepris/projekt/(\d+)", link["href"])
+    return m.group(1) if m else None
 
 
 def get_award_details(
@@ -36,7 +159,47 @@ def get_award_details(
     cache_dir: Path,
     force_refresh: bool,
 ) -> AwardDetailsResult:
-    raise NotImplementedError
+    found: list[AwardDetails] = []
+    not_found: list[AwardNotFound] = []
+
+    session = _make_session()
+
+    for award_id in award_ids:
+        time.sleep(random.uniform(1.0, 2.0))
+
+        gepris_id = award_id
+
+        if not _GEPRIS_NUMERIC_RE.match(award_id):
+            gepris_id_found = _search_gepris_for_programme(session, award_id)
+            if gepris_id_found is None:
+                not_found.append(
+                    AwardNotFound(
+                        funder_id=FUNDER_ID,
+                        input_text=award_id,
+                        reason=NotFoundReason.NOT_FOUND,
+                        detail="No GEPRIS project found for programme code",
+                    )
+                )
+                continue
+            gepris_id = gepris_id_found
+
+        details, error = _fetch_gepris_project(session, gepris_id)
+        if details is None:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.NOT_FOUND
+                    if error == "not_found"
+                    else NotFoundReason.API_ERROR,
+                    detail=error or "Not found",
+                )
+            )
+            continue
+
+        found.append(details)
+
+    return AwardDetailsResult(found=found, not_found=not_found)
 
 
 EXAMPLES = FunderExamples(

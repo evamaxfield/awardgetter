@@ -1,9 +1,13 @@
 """Funder matcher for the U.S. Department of Energy (DOE)."""
 
 import re
+import time
+from datetime import datetime
 from pathlib import Path
 
-from .._award import AwardDetailsResult
+import requests
+
+from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
@@ -17,6 +21,21 @@ FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("Department of Energy",)
 # "DE" (DEAC05-00OR22725) as seen in real acknowledgements.
 _DOE_RE = re.compile(r"\bDE-?[A-Z]{2}\d+(?:-\d{2}[A-Z]{2}\d+)?\b")
 
+# Management & Operating contracts: DE-AC{NN}-{YY}{XX}{NNNNN}
+# These are lab-wide umbrella contracts, not individual research grants.
+_DOE_MO_RE = re.compile(r"^DE-AC\d{2}-\d{2}[A-Z]{2}\d+$")
+
+_USASPENDING_URL = "https://api.usaspending.gov/api/v2/awards/"
+
+
+def _parse_doe_date(s: str | None):
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
 
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
@@ -24,7 +43,18 @@ def check_award_id(text: str) -> bool:
 
 
 def extract_award_ids(text: str) -> list[str]:
-    raise NotImplementedError
+    s = normalize_dashes(text)
+    seen: set[str] = set()
+    results: list[str] = []
+    for m in _DOE_RE.finditer(s):
+        val = m.group(0).rstrip(".")
+        # Normalize missing hyphen: DEAC... -> DE-AC...
+        if val.upper().startswith("DE") and len(val) > 2 and val[2] != "-":
+            val = "DE-" + val[2:]
+        if val not in seen:
+            seen.add(val)
+            results.append(val)
+    return results
 
 
 def get_award_details(
@@ -32,7 +62,93 @@ def get_award_details(
     cache_dir: Path,
     force_refresh: bool,
 ) -> AwardDetailsResult:
-    raise NotImplementedError
+    found: list[AwardDetails] = []
+    not_found: list[AwardNotFound] = []
+
+    for award_id in award_ids:
+        if _DOE_MO_RE.match(award_id):
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.NOT_FOUND,
+                    detail="M&O contract (lab-wide umbrella contract, not an individual grant)",
+                )
+            )
+            continue
+
+        try:
+            resp = requests.post(
+                _USASPENDING_URL,
+                json={"award_id": award_id},
+                timeout=10,
+            )
+        except requests.exceptions.RequestException as exc:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.API_ERROR,
+                    detail=str(exc),
+                )
+            )
+            continue
+
+        if resp.status_code == 404:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.NOT_FOUND,
+                    detail="Not found in USASpending",
+                )
+            )
+            continue
+
+        if resp.status_code == 429:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.RATE_LIMITED,
+                    detail="HTTP 429",
+                )
+            )
+            continue
+
+        if not resp.ok:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.API_ERROR,
+                    detail=f"HTTP {resp.status_code}",
+                )
+            )
+            continue
+
+        data = resp.json()
+        pop = data.get("period_of_performance") or {}
+        amount_raw = data.get("total_obligated_amount")
+        try:
+            amount = float(amount_raw) if amount_raw is not None else None
+        except (ValueError, TypeError):
+            amount = None
+
+        found.append(
+            AwardDetails(
+                funder_id=FUNDER_ID,
+                award_id=award_id,
+                amount_funded=amount,
+                currency="USD",
+                start_date=_parse_doe_date(pop.get("start_date")),
+                end_date=_parse_doe_date(pop.get("end_date")),
+            )
+        )
+
+        time.sleep(0.5)
+
+    return AwardDetailsResult(found=found, not_found=not_found)
 
 
 EXAMPLES = FunderExamples(

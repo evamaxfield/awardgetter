@@ -35,4 +35,7 @@ ALL_DETAIL_FUNDERS: tuple[FunderModule, ...] = (
     # ec_cordis,
     snsf,
     epsrc_ukri,
+    anr,
+    doe,
+    dfg,
 )

@@ -1,9 +1,13 @@
 """Funder matcher for the French Agence Nationale de la Recherche (ANR)."""
 
 import re
+from datetime import datetime
 from pathlib import Path
 
-from .._award import AwardDetailsResult
+import polars as pl
+
+from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
+from .._cache import get_cached_file
 from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
@@ -24,6 +28,59 @@ _ANR_NO_PREFIX_RE = re.compile(
     r"\b\d{2}-(?:LABX|EQPX|IDEX|INBS|NEUC|PCPA|JCJC|MRSEI|MPGA|CE\d+)-\d+(?:-\d+)?\b"
 )
 
+# Stable data.gouv.fr resource permalink URLs (redirect to latest file).
+# Resource IDs are stable even when the underlying file is republished.
+_ANR_DGDS_2010_URL = (
+    "https://www.data.gouv.fr/fr/datasets/r/87d29a24-392e-4a29-a009-83eddcff3e66"
+)
+_ANR_DGDS_2010_FILENAME = "anr_dgds_depuis_2010.csv"
+
+_ANR_DGDS_2009_URL = (
+    "https://www.data.gouv.fr/fr/datasets/r/74a59cc0-ef79-458a-83e0-f181f9da459f"
+)
+_ANR_DGDS_2009_FILENAME = "anr_dgds_2005_2009.csv"
+
+_ANR_PIA_URL = "https://www.data.gouv.fr/fr/datasets/r/aca6972b-577c-496a-aa26-009f81256dcb"
+_ANR_PIA_FILENAME = "anr_pia.csv"
+
+_ANR_CODE_COL = "Projet.Code_Decision"
+_ANR_AMOUNT_COL = "Projet.Montant.AF.Aide_allouee.ANR"
+_ANR_START_COL = "Projet.T0 scientifique"
+
+_ANR_PROJECT_NUM_RE = re.compile(r"^(ANR-\d{2}-[A-Z]{2,6}\d*-)(\d+)((?:-\d+)?)$")
+
+
+def _anr_lookup_keys(ref: str) -> list[str]:
+    """Return candidate lookup keys, including zero-padded project number variant."""
+    ref = ref.upper()
+    m = _ANR_PROJECT_NUM_RE.match(ref)
+    if m:
+        prefix, num, suffix = m.groups()
+        padded = prefix + num.zfill(4) + suffix
+        return [ref, padded] if padded != ref else [ref]
+    return [ref]
+
+
+def _parse_anr_amount(s: str | None) -> float | None:
+    if not s:
+        return None
+    cleaned = (
+        str(s).replace("€", "").replace("\xa0", "").replace(" ", "").replace(",", ".").strip()
+    )
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def _parse_anr_date(s: str | None):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s).strip()).date()
+    except ValueError:
+        return None
+
 
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
@@ -31,7 +88,20 @@ def check_award_id(text: str) -> bool:
 
 
 def extract_award_ids(text: str) -> list[str]:
-    raise NotImplementedError
+    s = normalize_dashes(text)
+    seen: set[str] = set()
+    results: list[str] = []
+    for m in _ANR_WITH_PREFIX_RE.finditer(s):
+        val = m.group(0).upper()
+        if val not in seen:
+            seen.add(val)
+            results.append(val)
+    for m in _ANR_NO_PREFIX_RE.finditer(s):
+        val = "ANR-" + m.group(0).upper()
+        if val not in seen:
+            seen.add(val)
+            results.append(val)
+    return results
 
 
 def get_award_details(
@@ -39,7 +109,93 @@ def get_award_details(
     cache_dir: Path,
     force_refresh: bool,
 ) -> AwardDetailsResult:
-    raise NotImplementedError
+    found: list[AwardDetails] = []
+    not_found: list[AwardNotFound] = []
+
+    lookup: dict[str, dict] = {}
+    end_col: str | None = None
+    csv_error: str | None = None
+
+    for url, filename in [
+        (_ANR_DGDS_2010_URL, _ANR_DGDS_2010_FILENAME),
+        (_ANR_DGDS_2009_URL, _ANR_DGDS_2009_FILENAME),
+        (_ANR_PIA_URL, _ANR_PIA_FILENAME),
+    ]:
+        try:
+            csv_path = get_cached_file(url, filename, cache_dir, force_refresh)
+            df = pl.read_csv(
+                csv_path,
+                separator=";",
+                infer_schema=False,
+                ignore_errors=True,
+                truncate_ragged_lines=True,
+            )
+        except Exception as exc:
+            csv_error = str(exc)
+            continue
+
+        if _ANR_CODE_COL not in df.columns:
+            continue
+
+        if end_col is None:
+            for col in df.columns:
+                col_lower = col.lower()
+                if col != _ANR_START_COL and ("fin" in col_lower or "t_fin" in col_lower):
+                    end_col = col
+                    break
+
+        cols = [
+            c
+            for c in [_ANR_CODE_COL, _ANR_AMOUNT_COL, _ANR_START_COL, end_col]
+            if c and c in df.columns
+        ]
+        for row in df.select(cols).to_dicts():
+            code = str(row.get(_ANR_CODE_COL) or "").strip().upper()
+            if code:
+                lookup[code] = row
+
+    if not lookup:
+        for aid in award_ids:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=aid,
+                    reason=NotFoundReason.CACHE_ERROR,
+                    detail=csv_error or "Failed to load ANR bulk CSV exports",
+                )
+            )
+        return AwardDetailsResult(found=found, not_found=not_found)
+
+    for award_id in award_ids:
+        row = None
+        for key in _anr_lookup_keys(award_id):
+            row = lookup.get(key)
+            if row is not None:
+                break
+
+        if row is None:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.NOT_FOUND,
+                    detail="Reference not found in ANR bulk exports",
+                )
+            )
+            continue
+
+        found.append(
+            AwardDetails(
+                funder_id=FUNDER_ID,
+                award_id=award_id,
+                amount_funded=_parse_anr_amount(row.get(_ANR_AMOUNT_COL)),
+                currency="EUR",
+                start_date=_parse_anr_date(row.get(_ANR_START_COL)),
+                end_date=_parse_anr_date(row.get(end_col)) if end_col else None,
+            )
+        )
+
+    return AwardDetailsResult(found=found, not_found=not_found)
 
 
 EXAMPLES = FunderExamples(
