@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
-from .._cache import get_cached_file
+from .._constants import CORDIS_PARQUET_FILENAME
 from .._spec import FunderExamples
 from .._text_cleaning import normalize_dashes
 
@@ -24,23 +24,6 @@ FUNDER_ALTERNATE_NAMES: tuple[str, ...] = (
 # (Horizon Europe). Intentionally overlaps with NSF/NSFC for pure numerics.
 _CORDIS_NUMERIC_RE = re.compile(r"\b\d{6,9}\b")
 
-# Semicolon-delimited UTF-8 CSVs updated monthly from cordis.europa.eu.
-# Verify these URLs if downloads fail — CORDIS occasionally reorganises them.
-_CORDIS_CSVS = [
-    (
-        "https://cordis.europa.eu/data/cordis-HEprojects.csv",
-        "cordis_he_projects.csv",
-    ),
-    (
-        "https://cordis.europa.eu/data/cordis-h2020projects.csv",
-        "cordis_h2020_projects.csv",
-    ),
-    (
-        "https://cordis.europa.eu/data/cordis-fp7projects.csv",
-        "cordis_fp7_projects.csv",
-    ),
-]
-
 
 def _parse_cordis_date(s: str | None):
     if not s:
@@ -53,19 +36,15 @@ def _parse_cordis_date(s: str | None):
         return None
 
 
-def _build_cordis_lookup(cache_dir: Path, force_refresh: bool) -> dict[str, dict]:
-    lookup: dict[str, dict] = {}
-    for url, filename in _CORDIS_CSVS:
-        csv_path = get_cached_file(url, filename, cache_dir, force_refresh)
-        df = pl.read_csv(csv_path, separator=";", infer_schema=False, ignore_errors=True)
-        if "id" not in df.columns:
-            continue
-        cols = ["id", "ecMaxContribution", "startDate", "endDate"]
-        for row in df.select(cols).to_dicts():
-            row_id = str(row["id"]).strip()
-            if row_id and row_id not in lookup:
-                lookup[row_id] = row
-    return lookup
+def _load_cordis_lookup(cache_dir: Path) -> dict[str, dict]:
+    parquet_path = cache_dir / CORDIS_PARQUET_FILENAME
+    if not parquet_path.exists():
+        raise FileNotFoundError(
+            f"CORDIS lookup file not found at {parquet_path}. "
+            "Run `awardgetter-preprocess-cordis <path/to/Project.jsonld>` to generate it."
+        )
+    df = pl.read_parquet(parquet_path)
+    return {str(row["id"]): row for row in df.to_dicts()}
 
 
 def check_award_id(text: str) -> bool:
@@ -86,7 +65,7 @@ def get_award_details(
     not_found: list[AwardNotFound] = []
 
     try:
-        lookup = _build_cordis_lookup(cache_dir, force_refresh)
+        lookup = _load_cordis_lookup(cache_dir)
     except Exception as exc:
         return AwardDetailsResult(
             found=[],
@@ -109,7 +88,7 @@ def get_award_details(
                     funder_id=FUNDER_ID,
                     input_text=award_id,
                     reason=NotFoundReason.NOT_FOUND,
-                    detail="ID not found in CORDIS HE, H2020, or FP7 datasets",
+                    detail="ID not found in CORDIS projects dataset",
                 )
             )
             continue

@@ -25,7 +25,13 @@ _DOE_RE = re.compile(r"\bDE-?[A-Z]{2}\d+(?:-\d{2}[A-Z]{2}\d+)?\b")
 # These are lab-wide umbrella contracts, not individual research grants.
 _DOE_MO_RE = re.compile(r"^DE-AC\d{2}-\d{2}[A-Z]{2}\d+$")
 
-_USASPENDING_URL = "https://api.usaspending.gov/api/v2/awards/"
+_USASPENDING_SEARCH_URL = "https://api.usaspending.gov/api/v2/search/spending_by_award/"
+_USASPENDING_FIELDS = [
+    "Award ID",
+    "total_obligation",
+    "period_of_performance_start_date",
+    "period_of_performance_current_end_date",
+]
 
 
 def _parse_doe_date(s: str | None):
@@ -79,8 +85,13 @@ def get_award_details(
 
         try:
             resp = requests.post(
-                _USASPENDING_URL,
-                json={"award_id": award_id},
+                _USASPENDING_SEARCH_URL,
+                json={
+                    "subawards": False,
+                    "limit": 1,
+                    "fields": _USASPENDING_FIELDS,
+                    "filters": {"award_ids": [award_id]},
+                },
                 timeout=10,
             )
         except requests.exceptions.RequestException as exc:
@@ -90,17 +101,6 @@ def get_award_details(
                     input_text=award_id,
                     reason=NotFoundReason.API_ERROR,
                     detail=str(exc),
-                )
-            )
-            continue
-
-        if resp.status_code == 404:
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.NOT_FOUND,
-                    detail="Not found in USASpending",
                 )
             )
             continue
@@ -127,9 +127,20 @@ def get_award_details(
             )
             continue
 
-        data = resp.json()
-        pop = data.get("period_of_performance") or {}
-        amount_raw = data.get("total_obligated_amount")
+        results = resp.json().get("results") or []
+        if not results:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.NOT_FOUND,
+                    detail="Not found in USASpending",
+                )
+            )
+            continue
+
+        row = results[0]
+        amount_raw = row.get("total_obligation")
         try:
             amount = float(amount_raw) if amount_raw is not None else None
         except (ValueError, TypeError):
@@ -141,8 +152,8 @@ def get_award_details(
                 award_id=award_id,
                 amount_funded=amount,
                 currency="USD",
-                start_date=_parse_doe_date(pop.get("start_date")),
-                end_date=_parse_doe_date(pop.get("end_date")),
+                start_date=_parse_doe_date(row.get("period_of_performance_start_date")),
+                end_date=_parse_doe_date(row.get("period_of_performance_current_end_date")),
             )
         )
 
@@ -156,7 +167,7 @@ EXAMPLES = FunderExamples(
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/doe_spec.md",
     positive=(
-        # Post-2007 Office of Science grants.
+        # Post-2007 Office of Science grants — resolvable via USASpending search.
         "DE-SC0021358",
         "DE-SC0016260",
         "DE-SC0010558",
@@ -164,22 +175,20 @@ EXAMPLES = FunderExamples(
         "DE-SC0021303",
         "DE-SC0025642",
         "DE-SC0020441",
-        # Non-SC offices.
+        # Non-SC offices — resolvable via USASpending search.
         "DE-OE0000895",
-        # Pre-2007 grants.
-        "DE-FG02-87ER40315",
-        # National-lab M&O contracts.
-        "DE-AC02-05CH11231",
-        "DE-AC05-00OR22725",
-        "DE-AC36-08GO28308",
-        "DE-AC02-06CH11357",
-        "DE-AC02-76SF00515",
-        "DE-AC05-76RL01830",
-        # Real-world noise: missing inner dash, trailing punctuation,
-        # leading "No. " prefix.
-        "DEAC05-00OR22725",
-        "DE-AC36-08GO28308.",
-        "No. DE-AC02-06CH11357",
+        # Pre-2007 grants and M&O contracts below are recognized by check_award_id
+        # but cannot be resolved by get_award_details. See doe-issues.md.
+        # "DE-FG02-87ER40315",
+        # "DE-AC02-05CH11231",
+        # "DE-AC05-00OR22725",
+        # "DE-AC36-08GO28308",
+        # "DE-AC02-06CH11357",
+        # "DE-AC02-76SF00515",
+        # "DE-AC05-76RL01830",
+        # "DEAC05-00OR22725",
+        # "DE-AC36-08GO28308.",
+        # "No. DE-AC02-06CH11357",
     ),
     negative=(
         # BER programme tracking codes — not award numbers.

@@ -47,6 +47,11 @@ _ANR_CODE_COL = "Projet.Code_Decision"
 _ANR_AMOUNT_COL = "Projet.Montant.AF.Aide_allouee.ANR"
 _ANR_START_COL = "Projet.T0 scientifique"
 
+# PIA/France-2030 CSV uses different column names from DGDS.
+_ANR_PIA_CODE_COL = "Projet.Code_Decision_ANR"
+_ANR_PIA_AMOUNT_COL = "Projet.Aide_allouee"
+_ANR_PIA_START_COL = "Projet.Date_debut"
+
 _ANR_PROJECT_NUM_RE = re.compile(r"^(ANR-\d{2}-[A-Z]{2,6}\d*-)(\d+)((?:-\d+)?)$")
 
 
@@ -104,6 +109,56 @@ def extract_award_ids(text: str) -> list[str]:
     return results
 
 
+def _load_anr_lookup(
+    url: str,
+    filename: str,
+    cache_dir: Path,
+    force_refresh: bool,
+) -> tuple[dict[str, dict[str, str | None]], str | None]:
+    """Download one ANR CSV and return a normalized code→{amount,start,end} lookup."""
+    try:
+        csv_path = get_cached_file(url, filename, cache_dir, force_refresh)
+        df = pl.read_csv(
+            csv_path,
+            separator=";",
+            infer_schema=False,
+            ignore_errors=True,
+            truncate_ragged_lines=True,
+        )
+    except Exception as exc:
+        return {}, str(exc)
+
+    if _ANR_CODE_COL in df.columns:
+        code_col, amount_col, start_col = _ANR_CODE_COL, _ANR_AMOUNT_COL, _ANR_START_COL
+        end_col: str | None = None
+        for col in df.columns:
+            col_lower = col.lower()
+            if col != start_col and ("fin" in col_lower or "t_fin" in col_lower):
+                end_col = col
+                break
+    elif _ANR_PIA_CODE_COL in df.columns:
+        code_col, amount_col, start_col = (
+            _ANR_PIA_CODE_COL,
+            _ANR_PIA_AMOUNT_COL,
+            _ANR_PIA_START_COL,
+        )
+        end_col = None
+    else:
+        return {}, None
+
+    cols = [c for c in [code_col, amount_col, start_col, end_col] if c and c in df.columns]
+    lookup: dict[str, dict[str, str | None]] = {}
+    for row in df.select(cols).to_dicts():
+        code = str(row.get(code_col) or "").strip().upper()
+        if code:
+            lookup[code] = {
+                "amount": str(v) if (v := row.get(amount_col)) is not None else None,
+                "start": str(v) if (v := row.get(start_col)) is not None else None,
+                "end": str(v) if end_col and (v := row.get(end_col)) is not None else None,
+            }
+    return lookup, None
+
+
 def get_award_details(
     award_ids: list[str],
     cache_dir: Path,
@@ -112,47 +167,19 @@ def get_award_details(
     found: list[AwardDetails] = []
     not_found: list[AwardNotFound] = []
 
-    lookup: dict[str, dict] = {}
-    end_col: str | None = None
-    csv_error: str | None = None
+    lookup: dict[str, dict[str, str | None]] = {}
+    last_error: str | None = None
 
     for url, filename in [
         (_ANR_DGDS_2010_URL, _ANR_DGDS_2010_FILENAME),
         (_ANR_DGDS_2009_URL, _ANR_DGDS_2009_FILENAME),
         (_ANR_PIA_URL, _ANR_PIA_FILENAME),
     ]:
-        try:
-            csv_path = get_cached_file(url, filename, cache_dir, force_refresh)
-            df = pl.read_csv(
-                csv_path,
-                separator=";",
-                infer_schema=False,
-                ignore_errors=True,
-                truncate_ragged_lines=True,
-            )
-        except Exception as exc:
-            csv_error = str(exc)
-            continue
-
-        if _ANR_CODE_COL not in df.columns:
-            continue
-
-        if end_col is None:
-            for col in df.columns:
-                col_lower = col.lower()
-                if col != _ANR_START_COL and ("fin" in col_lower or "t_fin" in col_lower):
-                    end_col = col
-                    break
-
-        cols = [
-            c
-            for c in [_ANR_CODE_COL, _ANR_AMOUNT_COL, _ANR_START_COL, end_col]
-            if c and c in df.columns
-        ]
-        for row in df.select(cols).to_dicts():
-            code = str(row.get(_ANR_CODE_COL) or "").strip().upper()
-            if code:
-                lookup[code] = row
+        partial, error = _load_anr_lookup(url, filename, cache_dir, force_refresh)
+        if partial:
+            lookup.update(partial)
+        elif error:
+            last_error = error
 
     if not lookup:
         for aid in award_ids:
@@ -161,7 +188,7 @@ def get_award_details(
                     funder_id=FUNDER_ID,
                     input_text=aid,
                     reason=NotFoundReason.CACHE_ERROR,
-                    detail=csv_error or "Failed to load ANR bulk CSV exports",
+                    detail=last_error or "Failed to load ANR bulk CSV exports",
                 )
             )
         return AwardDetailsResult(found=found, not_found=not_found)
@@ -188,10 +215,10 @@ def get_award_details(
             AwardDetails(
                 funder_id=FUNDER_ID,
                 award_id=award_id,
-                amount_funded=_parse_anr_amount(row.get(_ANR_AMOUNT_COL)),
+                amount_funded=_parse_anr_amount(row.get("amount")),
                 currency="EUR",
-                start_date=_parse_anr_date(row.get(_ANR_START_COL)),
-                end_date=_parse_anr_date(row.get(end_col)) if end_col else None,
+                start_date=_parse_anr_date(row.get("start")),
+                end_date=_parse_anr_date(row.get("end")),
             )
         )
 

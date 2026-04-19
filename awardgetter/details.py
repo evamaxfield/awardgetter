@@ -3,10 +3,9 @@
 from pathlib import Path
 
 from ._award import AwardDetailsResult, AwardNotFound, NotFoundReason
+from ._constants import DEFAULT_CACHE_DIR
 from ._spec import FunderModule
 from .funders import ALL_DETAIL_FUNDERS
-
-_DEFAULT_CACHE_DIR = Path.home() / ".cache" / "awardgetter"
 
 
 def _build_lookup() -> dict[str, FunderModule]:
@@ -64,7 +63,7 @@ def get_award_details(
         supported = sorted({m.FUNDER_ID for m in ALL_DETAIL_FUNDERS})
         raise ValueError(f"Unknown funder {funder!r}. Supported funder IDs: {supported}")
 
-    resolved_cache_dir = cache_dir if cache_dir is not None else _DEFAULT_CACHE_DIR
+    resolved_cache_dir = cache_dir if cache_dir is not None else DEFAULT_CACHE_DIR
 
     extracted = mod.extract_award_ids(award_id)
     if not extracted:

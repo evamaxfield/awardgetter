@@ -30,6 +30,7 @@ dependencies = [
   "beautifulsoup4>=4",
   "polars>=1",
   "requests>=2",
+  "typer>=0.9",
 ]
 
 # extra dependencies
@@ -48,10 +49,9 @@ Documentation = "https://evamaxfield.github.io/awardgetter"
 "User Support" = "https://github.com/evamaxfield/awardgetter/issues"
 
 # entry points
-# example
-# rs-graph-prelinked-dataset-ingestion = "rs_graph.bin.prelinked_dataset_ingestion:main"
 # https://peps.python.org/pep-0621/#entry-points
-# [project.entry-points."console_scripts"]
+[project.scripts]
+awardgetter-preprocess-cordis = "awardgetter.bin.preprocess_cordis:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
@@ -108,4 +108,4 @@ markers = [
 ]
 
 [tool.pyrefly]
-project-excludes = [".github", ".pre-commit-config.yaml", "pyproject.toml"]
+project-excludes = [".github", ".pre-commit-config.yaml", "pyproject.toml", "awardgetter/bin"]
