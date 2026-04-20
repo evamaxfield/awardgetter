@@ -16,9 +16,9 @@ To add or edit examples for a funder, edit the `EXAMPLES` constant in the
 corresponding `awardgetter/funders/<id>.py` file.
 """
 
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from ..funders import ALL_FUNDERS
 
 FUNDER_EXAMPLES: dict[str, FunderExamples] = {f.FUNDER_ID: f.EXAMPLES for f in ALL_FUNDERS}
 
-__all__ = ["FUNDER_EXAMPLES", "FunderExamples"]
+__all__ = ["FUNDER_EXAMPLES", "ExtractionExample", "FunderExamples"]

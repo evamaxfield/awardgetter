@@ -20,11 +20,17 @@ from .examples import FUNDER_EXAMPLES
 
 
 def _expand_positives() -> list:
-    return [
-        pytest.param(funder_id, text, id=f"{funder_id}::{text}")
-        for funder_id, examples in FUNDER_EXAMPLES.items()
-        for text in examples.positive
-    ]
+    params = []
+    for funder_id, examples in FUNDER_EXAMPLES.items():
+        for text in (
+            *examples.verified_awards,
+            *examples.matching_ids,
+            *examples.not_found_awards,
+        ):
+            params.append(pytest.param(funder_id, text, id=f"{funder_id}::{text}"))
+        for ex in examples.extraction_texts:
+            params.append(pytest.param(funder_id, ex.text, id=f"{funder_id}::{ex.text}"))
+    return params
 
 
 @pytest.mark.parametrize(("funder_id", "text"), _expand_positives())

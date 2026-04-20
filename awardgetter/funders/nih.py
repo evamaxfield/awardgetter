@@ -238,25 +238,29 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="awardgetter/funders/nih.py (no plan file)",
-    positive=(
-        # Canonical project numbers: activity code, institute code, serial.
+    verified_awards=(
+        # Canonical project numbers confirmed via NIH RePORTER.
         "U24NS124001",
         "U24CA086368",
         "T32GM007347",
         # With application-type digit and support-year suffix.
         "5U24NS124001-05",
         "5U24CA086368-25",
+    ),
+    matching_ids=(
         # NIH agency word and bracketed text are stripped before matching.
         "[NIH] U24NS124001",
         "NIH U24NS124001",
         # Internal whitespace within the project number is tolerated.
         "U24 NS 124001",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         "EP/S00923X/1",
         "ANR-21-CE29-0003",
         "2022ZD0160401",
         "DFG SFB1114",
         "12345",
     ),
+    extraction_texts=(),
 )

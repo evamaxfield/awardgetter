@@ -37,7 +37,8 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/nsfc_scraper_spec.md",
-    positive=(
+    verified_awards=(),
+    matching_ids=(
         # Standard 8-digit NSFC numbers.
         "62206216",
         "91949120",
@@ -55,7 +56,8 @@ EXAMPLES = FunderExamples(
         # Hyphenated form: numeric prefix is matched even with sub-task suffix.
         "20221279-ZKT03",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         # Municipal / provincial funds. The internal letter-digit junctions
         # have no word boundary, so the digit run is never matched.
         "JCYJ20210324120011032",
@@ -70,4 +72,5 @@ EXAMPLES = FunderExamples(
         "EP/S00923X/1",
         "ANR-21-CE29-0003",
     ),
+    extraction_texts=(),
 )

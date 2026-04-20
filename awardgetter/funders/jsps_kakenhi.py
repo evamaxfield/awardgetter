@@ -42,7 +42,8 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/jsps_kakenhi_spec.md",
-    positive=(
+    verified_awards=(),
+    matching_ids=(
         # Standard `YY` + letter code + 5-digit serial.
         "24K22291",
         "22H05118",
@@ -62,7 +63,8 @@ EXAMPLES = FunderExamples(
         # current matcher does not recognise.
         "KAKENHI Grants JP26282221, JP26120733, JP18H04037, and JP20H05955",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         # JST grants — different funder entirely.
         "JPMJSP2119",
         # Old purely-numeric KAKENHI numbers — not handled by the current regex
@@ -79,4 +81,5 @@ EXAMPLES = FunderExamples(
         "EP/S00923X/1",
         "DE-SC0021358",
     ),
+    extraction_texts=(),
 )

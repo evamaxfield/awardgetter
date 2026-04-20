@@ -167,8 +167,8 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/snsf_spec.md",
-    positive=(
-        # Programme-prefixed grant numbers.
+    verified_awards=(
+        # Programme-prefixed grant numbers confirmed in SNSF bulk CSV.
         "PZ00P3_180085",
         "PDFMP3-130309",
         "51NF40_141869",
@@ -181,12 +181,15 @@ EXAMPLES = FunderExamples(
         "200021L_212718",
         "CR22I2_166110",
         "P400PB_199242",
-        # Leading `#` is stripped.
+    ),
+    matching_ids=(
+        # Leading `#` is stripped before matching.
         "#51NF40_180888",
-        # Embedded in a descriptive label.
+        # Grant number embedded in a descriptive label.
         "Prospective Researcher Fellowship, PBZHP2-147259",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         # Programme umbrellas — not single grants.
         "NRP-77",
         "SNSF-ERC",
@@ -201,4 +204,5 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "ANR-21-CE29-0003",
     ),
+    extraction_texts=(),
 )

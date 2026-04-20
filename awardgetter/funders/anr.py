@@ -8,7 +8,7 @@ import polars as pl
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._cache import get_cached_file
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "anr"
@@ -235,8 +235,8 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/anr_spec.md",
-    positive=(
-        # Standard ANR competitive grants (DGDS) — `ANR-YY-CExx-NNNN[-S]`.
+    verified_awards=(
+        # Standard ANR competitive grants (DGDS) — confirmed in ANR bulk CSV.
         "ANR-21-CE29-0003",
         "ANR-17-CE32-0006",
         "ANR-19-CE39-0007",
@@ -245,22 +245,23 @@ EXAMPLES = FunderExamples(
         "ANR-21-CE23-0006",
         "ANR-19-NEUC-0004",
         "ANR-18-CE40-0005",
-        # PIA / France 2030 grants — `ANR-YY-PROG-NNNN[-S]`.
+        # PIA / France 2030 grants — confirmed in ANR PIA bulk CSV.
         "ANR-10-LABX-12-0",
         "ANR-10-LABX-24",
         "ANR-10-EQPX-29-0",
         "ANR-10-EQPX-03",
         "ANR-11-INBS-0013",
         "ANR-10-INBS-09-08",
-        # No-prefix forms seen in acknowledgements.
+    ),
+    matching_ids=(
+        # No-prefix forms seen in acknowledgements — format-valid but not
+        # directly resolvable without the ANR- prefix normalization.
         "10-INBS-09-08",
         "16-IDEX-0004",
         "20-PCPA-0010",
-        # Multi-grant strings: a single hit anywhere in the text is sufficient.
-        "ANR-10-EQPX-03 (Equipex) and ANR-10-INBS-09-08 (France Genomique Consortium)",
-        "ANR GraVa ANR-18-CE40-0005",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         # Acronym-only references — not resolvable as ANR IDs.
         "CogFinAIgent",
         "OceaniX",
@@ -274,5 +275,26 @@ EXAMPLES = FunderExamples(
         "62206216",
         "2022ZD0160401",
         "R01HL123456",
+    ),
+    extraction_texts=(
+        # Two ANR IDs embedded in prose — both confirmed in ANR bulk CSVs.
+        ExtractionExample(
+            text="ANR-10-EQPX-03 (Equipex) and ANR-10-INBS-09-08 (France Genomique Consortium)",
+            expected_extracted=("ANR-10-EQPX-03", "ANR-10-INBS-09-08"),
+            verified_existing=("ANR-10-EQPX-03", "ANR-10-INBS-09-08"),
+        ),
+        # Single ANR ID embedded in a prose label.
+        ExtractionExample(
+            text="ANR GraVa ANR-18-CE40-0005",
+            expected_extracted=("ANR-18-CE40-0005",),
+            verified_existing=("ANR-18-CE40-0005",),
+        ),
+        # Three award-like tokens (1 NSF + 2 ANR) — ANR extractor returns only
+        # the two ANR IDs, demonstrating per-funder extraction selectivity.
+        ExtractionExample(
+            text="We thank NSF 1728743, ANR-21-CE29-0003 and ANR-17-CE32-0006 for support",
+            expected_extracted=("ANR-21-CE29-0003", "ANR-17-CE32-0006"),
+            verified_existing=("ANR-21-CE29-0003", "ANR-17-CE32-0006"),
+        ),
     ),
 )

@@ -117,18 +117,17 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/ec_cordis_spec.md",
-    positive=(
-        # Numeric CORDIS project IDs (6-9 digits, FP6 through Horizon Europe).
+    verified_awards=(
+        # Numeric CORDIS project IDs (6-9 digits, FP6 through Horizon Europe)
+        # confirmed in the CORDIS open-data parquet.
         "101069595",
         "101001318",
         "602150",
         "948381",
-        # 6-digit IDs are valid CORDIS but the NSFC plan classifies the same
-        # length as `unknown_short`. CORDIS owns 6-digit numerics here.
-        # "131060",  # Likely pre-FP6 (FP4/FP5 era); not present in the current
-        #            # CORDIS open-data dump which starts at FP6.
     ),
-    negative=(
+    matching_ids=(),
+    not_found_awards=(),
+    rejected_ids=(
         # Acronyms — handled as low-confidence lookups in the spec, but not by
         # the current numeric-only matcher.
         "NEXTGENE",
@@ -146,4 +145,5 @@ EXAMPLES = FunderExamples(
         # Too short.
         "12345",
     ),
+    extraction_texts=(),
 )

@@ -1,4 +1,4 @@
-"""Integration tests for `get_award_details` using each funder's positive examples.
+"""Integration tests for `get_award_details` using each funder's examples.
 
 Run with: pytest -m network -v
 These tests make real network calls (APIs or bulk-CSV downloads).
@@ -29,19 +29,28 @@ def cache_dir(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return tmp
 
 
-def _expand_detail_positives() -> list:
+def _expand_verified_awards() -> list:
     return [
         pytest.param(funder_id, text, id=f"{funder_id}::{text}")
         for funder_id, examples in FUNDER_EXAMPLES.items()
         if funder_id in _DETAIL_FUNDER_IDS
-        for text in examples.positive
+        for text in examples.verified_awards
+    ]
+
+
+def _expand_not_found_awards() -> list:
+    return [
+        pytest.param(funder_id, text, id=f"{funder_id}::{text}")
+        for funder_id, examples in FUNDER_EXAMPLES.items()
+        if funder_id in _DETAIL_FUNDER_IDS
+        for text in examples.not_found_awards
     ]
 
 
 @pytest.mark.network
 @flaky(max_runs=3, min_passes=1)
-@pytest.mark.parametrize(("funder_id", "text"), _expand_detail_positives())
-def test_get_award_details_finds_positive_example(
+@pytest.mark.parametrize(("funder_id", "text"), _expand_verified_awards())
+def test_get_award_details_finds_verified_award(
     funder_id: str, text: str, cache_dir: Path
 ) -> None:
     time.sleep(1)  # Be nice to APIs and avoid hitting rate limits
@@ -51,3 +60,15 @@ def test_get_award_details_finds_positive_example(
         f"got not_found={result.not_found}"
     )
     assert all(a.funder_id == funder_id for a in result.found)
+
+
+@pytest.mark.network
+@flaky(max_runs=3, min_passes=1)
+@pytest.mark.parametrize(("funder_id", "text"), _expand_not_found_awards())
+def test_get_award_details_not_found_award(funder_id: str, text: str, cache_dir: Path) -> None:
+    time.sleep(1)  # Be nice to APIs and avoid hitting rate limits
+    result = get_award_details(funder_id, text, cache_dir=cache_dir)
+    assert len(result.found) == 0, (
+        f"Expected no awards found for {funder_id!r} / {text!r}; got found={result.found}"
+    )
+    assert len(result.not_found) >= 1

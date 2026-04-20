@@ -197,32 +197,33 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/doe_spec.md",
-    positive=(
-        # Post-2007 Office of Science grants — resolvable via USASpending search.
+    verified_awards=(
+        # Post-2007 Office of Science grants — confirmed via USASpending search.
         "DE-SC0021358",
         "DE-SC0016260",
         "DE-SC0010558",
-        # "DE-SC0012704",  # Returns NOT_FOUND in USASpending; may have been
-        #                  # de-indexed or merged under a different award record.
         "DE-SC0021303",
         "DE-SC0025642",
         "DE-SC0020441",
-        # Non-SC offices — resolvable via USASpending search.
+        # Non-SC office — confirmed via USASpending search.
         "DE-OE0000895",
-        # Pre-2007 grants and M&O contracts below are recognized by check_award_id
-        # but cannot be resolved by get_award_details. See doe-issues.md.
-        # "DE-FG02-87ER40315",
-        # "DE-AC02-05CH11231",
-        # "DE-AC05-00OR22725",
-        # "DE-AC36-08GO28308",
-        # "DE-AC02-06CH11357",
-        # "DE-AC02-76SF00515",
-        # "DE-AC05-76RL01830",
-        # "DEAC05-00OR22725",
-        # "DE-AC36-08GO28308.",
-        # "No. DE-AC02-06CH11357",
+        # Pre-2007 grant
+        "DE-FG02-87ER40315",
     ),
-    negative=(
+    matching_ids=(
+        "DE-SC0010558",
+        "DE-SC0021303",
+        "DE-SC0025642",
+        "DE-SC0020441",
+    ),
+    not_found_awards=(
+        # M&O umbrella contracts: format-valid but intentionally not individual grants.
+        "DE-AC02-05CH11231",
+        "DE-AC05-00OR22725",
+        # M&O variant with missing DE- hyphen -- normalize_dashes handles it.
+        "DEAC05-00OR22725",
+    ),
+    rejected_ids=(
         # BER programme tracking codes — not award numbers.
         "ERKJ335",
         # Numeric-only / label-only inputs.
@@ -238,4 +239,5 @@ EXAMPLES = FunderExamples(
         "2022ZD0160401",
         "62206216",
     ),
+    extraction_texts=(),
 )

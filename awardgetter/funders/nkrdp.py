@@ -37,7 +37,8 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/nkrdp_spec.md",
-    positive=(
+    verified_awards=(),
+    matching_ids=(
         # Sub-project (15-char) IDs.
         "2022ZD0160401",
         "2022ZD0118302",
@@ -60,7 +61,8 @@ EXAMPLES = FunderExamples(
         # Youth Scientist Programme variant.
         "2021QNRC001",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         # Possibly a provincial fund — does not match the NKRDP code set.
         "B16003",
         # Truncated — no digits after the programme code.
@@ -71,4 +73,5 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "ANR-21-CE29-0003",
     ),
+    extraction_texts=(),
 )

@@ -128,10 +128,12 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="awardgetter/funders/nsf.py (no plan file)",
-    positive=(
-        # Bare 7-digit NSF award IDs.
+    verified_awards=(
+        # Bare 7-digit NSF award IDs confirmed via NSF API.
         "1728743",
         "2211275",
+    ),
+    matching_ids=(
         # NSF agency word is stripped, then 7-digit match.
         "NSF-2211275",
         "NSF 1728743",
@@ -140,7 +142,8 @@ EXAMPLES = FunderExamples(
         # Internal whitespace within the 7 digits is collapsed.
         "NSF 22 11275",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         # Wrong digit counts.
         "62206216",
         "131060",
@@ -150,4 +153,5 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "2022ZD0160401",
     ),
+    extraction_texts=(),
 )

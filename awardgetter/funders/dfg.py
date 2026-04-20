@@ -222,11 +222,13 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/dfg_gepris_spec.md",
-    positive=(
+    verified_awards=(
         # Strings with embedded GEPRIS numeric project IDs — resolvable via direct page fetch.
         "SFB1423 / 421152132 - A07",
         "SFB-TRR 358/1 2023-491392403",
-        # Programme-code-only entries — resolved via Selenium-based GEPRIS search.
+    ),
+    matching_ids=(
+        # Programme-code-only entries — require Selenium-based GEPRIS search to resolve.
         "SFB1114/A04",
         "SFB 1423",
         "EXC 2067/1 (MBExC)",
@@ -236,7 +238,8 @@ EXAMPLES = FunderExamples(
         "SPP 2363",
         "INST 35/1134-1 FUGG",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         # Bare GEPRIS numeric IDs — explicitly excluded by the DFG matcher to
         # avoid colliding with NSF/NSFC/CORDIS. See awardgetter/funders/dfg.py.
         "39087428",
@@ -257,4 +260,5 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "ANR-21-CE29-0003",
     ),
+    extraction_texts=(),
 )

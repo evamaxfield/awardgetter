@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "epsrc_ukri"
@@ -173,8 +173,8 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/epsrc_gtr_spec.md",
-    positive=(
-        # Standard EPSRC/UKRI references with `/N` suffix.
+    verified_awards=(
+        # Standard EPSRC/UKRI references confirmed via GtR API.
         "EP/I013067/1",
         "EP/P020259/1",
         "EP/D05592X/1",
@@ -182,15 +182,17 @@ EXAMPLES = FunderExamples(
         "EP/M025179/1",
         # MRC reference — also matched by the UKRI council-prefix pattern.
         "MR/R001154/1",
+    ),
+    matching_ids=(
         # Pure numeric GtR project ID (overlaps with NSF by design).
         "2882321",
         # Trailing-paren tolerated by the word-boundary regex.
         "EP/P020259/1)",
-        # Embedded in surrounding text or multi-grant strings.
+        # Embedded in surrounding text.
         "MVSE EP/V002856/1",
-        "EP/I013067/1 and EP/M025179/1",
     ),
-    negative=(
+    not_found_awards=(),
+    rejected_ids=(
         # Wellcome Trust — not part of UKRI.
         "WT101957",
         "WT203148/Z/16/Z",
@@ -210,5 +212,13 @@ EXAMPLES = FunderExamples(
         "ANR-21-CE29-0003",
         "DE-SC0021358",
         "62206216",
+    ),
+    extraction_texts=(
+        # Two UKRI grants in one string — both verified in GtR.
+        ExtractionExample(
+            text="EP/I013067/1 and EP/M025179/1",
+            expected_extracted=("EP/I013067/1", "EP/M025179/1"),
+            verified_existing=("EP/I013067/1", "EP/M025179/1"),
+        ),
     ),
 )
