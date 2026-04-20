@@ -3,6 +3,7 @@
 
 import json
 from pathlib import Path
+from typing import Annotated
 
 import polars as pl
 import typer
@@ -28,8 +29,12 @@ def _first_value(entity: dict, predicate: str) -> str | None:
 
 @app.command()
 def preprocess_cordis(
-    jsonld_path: Path = typer.Argument(..., help="Path to Project.jsonld from a CORDIS open-data dump"),
-    out_dir: Path = typer.Option(DEFAULT_CACHE_DIR, help="Output directory for the Parquet file"),
+    jsonld_path: Annotated[
+        str, typer.Argument(help="Path to Project.jsonld from a CORDIS open-data dump")
+    ],
+    out_dir: Annotated[str, typer.Option(help="Output directory for the Parquet file")] = str(
+        DEFAULT_CACHE_DIR
+    ),
 ) -> None:
     """Convert a CORDIS Project.jsonld dump to a compact Parquet lookup file.
 
@@ -37,12 +42,15 @@ def preprocess_cordis(
     cordis.europa.eu/en/projects/open-data, then run this command to generate
     the Parquet file that ec_cordis uses for award detail lookups.
     """
-    if not jsonld_path.exists():
-        typer.echo(f"Error: file not found: {jsonld_path}", err=True)
+    _jsonld_path = Path(jsonld_path)
+    _out_dir = Path(out_dir)
+
+    if not _jsonld_path.exists():
+        typer.echo(f"Error: file not found: {_jsonld_path}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Loading {jsonld_path} (this may take a minute) …")
-    with jsonld_path.open() as f:
+    typer.echo(f"Loading {_jsonld_path} (this may take a minute) …")
+    with _jsonld_path.open() as f:
         data: dict = json.load(f)
     typer.echo(f"Loaded {len(data):,} top-level entities.")
 
@@ -82,8 +90,8 @@ def preprocess_cordis(
         for p in projects
     ]
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / CORDIS_PARQUET_FILENAME
+    _out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = _out_dir / CORDIS_PARQUET_FILENAME
     pl.DataFrame(rows).write_parquet(out_path)
     typer.echo(f"Wrote {len(rows):,} rows to {out_path}")
 

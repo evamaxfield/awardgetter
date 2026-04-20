@@ -125,7 +125,8 @@ EXAMPLES = FunderExamples(
         "948381",
         # 6-digit IDs are valid CORDIS but the NSFC plan classifies the same
         # length as `unknown_short`. CORDIS owns 6-digit numerics here.
-        "131060",
+        # "131060",  # Likely pre-FP6 (FP4/FP5 era); not present in the current
+        #            # CORDIS open-data dump which starts at FP6.
     ),
     negative=(
         # Acronyms — handled as low-confidence lookups in the spec, but not by

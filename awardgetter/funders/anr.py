@@ -56,13 +56,19 @@ _ANR_PROJECT_NUM_RE = re.compile(r"^(ANR-\d{2}-[A-Z]{2,6}\d*-)(\d+)((?:-\d+)?)$"
 
 
 def _anr_lookup_keys(ref: str) -> list[str]:
-    """Return candidate lookup keys, including zero-padded project number variant."""
+    """Return candidate lookup keys: original, zero-padded, and suffix-stripped variants."""
     ref = ref.upper()
     m = _ANR_PROJECT_NUM_RE.match(ref)
     if m:
         prefix, num, suffix = m.groups()
         padded = prefix + num.zfill(4) + suffix
-        return [ref, padded] if padded != ref else [ref]
+        keys: list[str] = [ref] if ref == padded else [ref, padded]
+        # Also try without the trailing suffix — ANR PIA CSV may omit it.
+        if suffix:
+            for k in [prefix + num, prefix + num.zfill(4)]:
+                if k not in keys:
+                    keys.append(k)
+        return keys
     return [ref]
 
 

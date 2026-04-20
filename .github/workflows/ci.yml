@@ -51,6 +51,20 @@ jobs:
         uv venv
         source .venv/bin/activate
         just install
+    - name: Cache CORDIS parquet
+      uses: actions/cache@v4
+      id: cordis-cache
+      with:
+        path: ~/.cache/awardgetter/cordis_projects.parquet
+        key: cordis-parquet-${{ hashFiles('awardgetter/bin/preprocess_cordis.py') }}
+    - name: Download and preprocess CORDIS data
+      if: steps.cordis-cache.outputs.cache-hit != 'true'
+      run: |
+        source .venv/bin/activate
+        curl -L https://cordis.europa.eu/data/cordis-projectNamedGraph-jsonld.zip -o cordis.zip
+        unzip cordis.zip Project.jsonld
+        awardgetter-preprocess-cordis Project.jsonld
+        rm -f cordis.zip Project.jsonld
     - name: Run Tests
       run: |
         source .venv/bin/activate

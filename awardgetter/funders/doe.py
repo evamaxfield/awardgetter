@@ -26,12 +26,10 @@ _DOE_RE = re.compile(r"\bDE-?[A-Z]{2}\d+(?:-\d{2}[A-Z]{2}\d+)?\b")
 _DOE_MO_RE = re.compile(r"^DE-AC\d{2}-\d{2}[A-Z]{2}\d+$")
 
 _USASPENDING_SEARCH_URL = "https://api.usaspending.gov/api/v2/search/spending_by_award/"
-_USASPENDING_FIELDS = [
-    "Award ID",
-    "total_obligation",
-    "period_of_performance_start_date",
-    "period_of_performance_current_end_date",
-]
+_USASPENDING_FIELDS = ["Award ID", "Award Amount", "Start Date", "End Date"]
+# Assistance award type codes (grants and cooperative agreements).
+# award_type_codes is now a required filter field in the USASpending API.
+_DOE_AWARD_TYPE_CODES = ["02", "03", "04", "05"]
 
 
 def _parse_doe_date(s: str | None):
@@ -83,6 +81,8 @@ def get_award_details(
             )
             continue
 
+        # USASpending stores FAINs without hyphens (DE-SC0021358 → DESC0021358).
+        fain = award_id.replace("-", "")
         try:
             resp = requests.post(
                 _USASPENDING_SEARCH_URL,
@@ -90,7 +90,10 @@ def get_award_details(
                     "subawards": False,
                     "limit": 1,
                     "fields": _USASPENDING_FIELDS,
-                    "filters": {"award_ids": [award_id]},
+                    "filters": {
+                        "award_ids": [fain],
+                        "award_type_codes": _DOE_AWARD_TYPE_CODES,
+                    },
                 },
                 timeout=10,
             )
@@ -140,7 +143,7 @@ def get_award_details(
             continue
 
         row = results[0]
-        amount_raw = row.get("total_obligation")
+        amount_raw = row.get("Award Amount")
         try:
             amount = float(amount_raw) if amount_raw is not None else None
         except (ValueError, TypeError):
@@ -152,8 +155,8 @@ def get_award_details(
                 award_id=award_id,
                 amount_funded=amount,
                 currency="USD",
-                start_date=_parse_doe_date(row.get("period_of_performance_start_date")),
-                end_date=_parse_doe_date(row.get("period_of_performance_current_end_date")),
+                start_date=_parse_doe_date(row.get("Start Date")),
+                end_date=_parse_doe_date(row.get("End Date")),
             )
         )
 
@@ -171,7 +174,8 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "DE-SC0016260",
         "DE-SC0010558",
-        "DE-SC0012704",
+        # "DE-SC0012704",  # Returns NOT_FOUND in USASpending; may have been
+        #                  # de-indexed or merged under a different award record.
         "DE-SC0021303",
         "DE-SC0025642",
         "DE-SC0020441",
