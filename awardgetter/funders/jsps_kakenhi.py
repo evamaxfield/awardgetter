@@ -14,6 +14,8 @@ FUNDER_ALTERNATE_NAMES: tuple[str, ...] = (
     "Japan Society for the Promotion of Science",
     "KAKENHI",
 )
+FUNDER_OPENALEX_ID: str = "F4320334764"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 # KAKENHI grant number: 2-digit fiscal year + letter code (H/K/J/L/N) +
 # 5-digit serial. Optional JP citation prefix. Handles multi-id strings

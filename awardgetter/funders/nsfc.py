@@ -11,6 +11,8 @@ FUNDER_ID: str = "nsfc"
 FUNDER_DISPLAY_NAME: str = "National Natural Science Foundation of China"
 FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ()
+FUNDER_OPENALEX_ID: str = "F4320321001"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 _NSFC_NUMERIC_RE = re.compile(r"\b\d{7,11}\b")
 _NSFC_JOINT_FUND_RE = re.compile(r"\bU\d{7,8}\b")

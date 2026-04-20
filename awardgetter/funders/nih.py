@@ -57,6 +57,8 @@ FUNDER_ALTERNATE_NAMES: tuple[str, ...] = (
     "National Center for Complementary and Integrative Health",
     "National Center for Advancing Translational Sciences",
 )
+FUNDER_OPENALEX_ID: str = "F4320332161"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ("F4320337351",)  # NCI
 
 _NIH_AGENCY_WORDS_RE = re.compile(
     r"\b(?:NIH|DHHS|HHS|NCI|NIGMS|NIAID|NIMH|NHLBI|NIDDK|NINDS|NICHD|NIBIB"

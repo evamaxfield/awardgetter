@@ -15,6 +15,8 @@ FUNDER_ID: str = "anr"
 FUNDER_DISPLAY_NAME: str = "Agence Nationale de la Recherche"
 FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("Agence nationale de la recherche",)
+FUNDER_OPENALEX_ID: str = "F4320320883"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 # Standard ANR reference: ANR-YY-XXXX-NNNN(-S), where XXXX is a 2-6 char
 # programme code (CE##, JCJC, MRSEI, MPGA, LABX, EQPX, IDEX, INBS, NEUC,

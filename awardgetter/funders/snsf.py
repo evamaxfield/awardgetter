@@ -17,6 +17,8 @@ FUNDER_ALTERNATE_NAMES: tuple[str, ...] = (
     "Schweizerischer Nationalfonds",
     "Fonds national suisse",
 )
+FUNDER_OPENALEX_ID: str = "F4320320924"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 # Covers known SNSF programme prefixes (Project Funding, NCCR, Sinergia,
 # PRIMA, Ambizione, Postdoc Mobility, Early Postdoc Mobility, international,

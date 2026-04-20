@@ -40,6 +40,8 @@ class FunderModule(Protocol):
     EXAMPLES: FunderExamples
     FUNDER_ALTERNATE_IDS: tuple[str, ...]
     FUNDER_ALTERNATE_NAMES: tuple[str, ...]
+    FUNDER_OPENALEX_ID: str
+    FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...]
 
     @staticmethod
     def check_award_id(text: str) -> bool: ...

@@ -11,6 +11,8 @@ FUNDER_ID: str = "nkrdp"
 FUNDER_DISPLAY_NAME: str = "National Key Research and Development Program of China"
 FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ()
+FUNDER_OPENALEX_ID: str = "F4320335777"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 # YYYY + programme code (YFA-YFF, ZD, AAA, QN[RC]) + sequential digits
 _NKRDP_RE = re.compile(r"\b\d{4}(?:YF[A-F]|ZD|AAA|QN[A-Z]*)\d+\b")

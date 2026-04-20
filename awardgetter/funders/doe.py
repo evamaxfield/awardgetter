@@ -15,6 +15,8 @@ FUNDER_ID: str = "doe"
 FUNDER_DISPLAY_NAME: str = "U.S. Department of Energy"
 FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("Department of Energy",)
+FUNDER_OPENALEX_ID: str = "F4320306084"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 # Matches post-2007 form (DE-SC0021358, DE-OE0000895) and pre-2007 form
 # (DE-FG02-87ER40315, DE-AC02-05CH11231). Accepts a missing hyphen after

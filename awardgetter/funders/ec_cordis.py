@@ -13,6 +13,8 @@ from .._text_cleaning import normalize_dashes
 FUNDER_ID: str = "ec_cordis"
 FUNDER_DISPLAY_NAME: str = "European Commission (CORDIS)"
 FUNDER_ALTERNATE_IDS: tuple[str, ...] = ("cordis", "ec", "h2020", "horizon", "fp7")
+FUNDER_OPENALEX_ID: str = "F4320320300"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = (
     "European Commission",
     "European Research Council",

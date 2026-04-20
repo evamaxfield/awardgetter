@@ -1,5 +1,6 @@
 """Top-level dispatcher for award detail retrieval."""
 
+import re
 from pathlib import Path
 
 from ._award import AwardDetailsResult, AwardNotFound, NotFoundReason
@@ -16,12 +17,16 @@ def _build_lookup() -> dict[str, FunderModule]:
             mod.FUNDER_DISPLAY_NAME,
             *mod.FUNDER_ALTERNATE_IDS,
             *mod.FUNDER_ALTERNATE_NAMES,
+            *([mod.FUNDER_OPENALEX_ID] if mod.FUNDER_OPENALEX_ID else []),
+            *mod.FUNDER_OPENALEX_ALTERNATE_IDS,
         ):
             table[key.casefold()] = mod
     return table
 
 
 _FUNDER_LOOKUP: dict[str, FunderModule] = _build_lookup()
+
+_OPENALEX_URL_RE = re.compile(r"^https?://openalex\.org/", re.IGNORECASE)
 
 
 def get_award_details(
@@ -58,7 +63,7 @@ def get_award_details(
     ValueError
         If ``funder`` does not match any registered detail funder.
     """
-    mod = _FUNDER_LOOKUP.get(funder.casefold())
+    mod = _FUNDER_LOOKUP.get(_OPENALEX_URL_RE.sub("", funder).casefold())
     if mod is None:
         supported = sorted({m.FUNDER_ID for m in ALL_DETAIL_FUNDERS})
         raise ValueError(f"Unknown funder {funder!r}. Supported funder IDs: {supported}")

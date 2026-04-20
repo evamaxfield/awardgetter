@@ -24,6 +24,8 @@ FUNDER_ID: str = "dfg"
 FUNDER_DISPLAY_NAME: str = "Deutsche Forschungsgemeinschaft"
 FUNDER_ALTERNATE_IDS: tuple[str, ...] = ("dfg",)
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("German Research Foundation",)
+FUNDER_OPENALEX_ID: str = "F4320320879"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 # Distinctive DFG programme codes only. Purely numeric GEPRIS project IDs
 # are intentionally not matched here because they overlap with NSF/NSFC/

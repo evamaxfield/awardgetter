@@ -33,6 +33,8 @@ FUNDER_ALTERNATE_NAMES: tuple[str, ...] = (
     "Arts and Humanities Research Council",
     "Science and Technology Facilities Council",
 )
+FUNDER_OPENALEX_ID: str = "F4320334627"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 _UKRI_RE = re.compile(r"\b(?:EP|MR|BB|NE|ES|AH|ST|GR)/[A-Z0-9]{6,9}(?:/\d+)?\b")
 _UKRI_NUMERIC_RE = re.compile(r"\b\d{7}\b")

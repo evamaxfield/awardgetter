@@ -14,6 +14,8 @@ FUNDER_ID: str = "nsf"
 FUNDER_DISPLAY_NAME: str = "U.S. National Science Foundation"
 FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("National Science Foundation",)
+FUNDER_OPENALEX_ID: str = "F4320306076"
+FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 _NSF_WORD_RE = re.compile(r"\bNSF\b", re.IGNORECASE)
 _DIGIT_SEPARATOR_DIGIT_RE = re.compile(r"(\d)[\s\-]+(\d)")
