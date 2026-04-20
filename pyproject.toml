@@ -30,6 +30,7 @@ dependencies = [
   "beautifulsoup4>=4",
   "polars>=1",
   "requests>=2",
+  "selenium>=4",
   "typer>=0.9",
 ]
 

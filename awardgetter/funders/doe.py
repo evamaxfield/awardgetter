@@ -31,6 +31,25 @@ _USASPENDING_FIELDS = ["Award ID", "Award Amount", "Start Date", "End Date"]
 # award_type_codes is now a required filter field in the USASpending API.
 _DOE_AWARD_TYPE_CODES = ["02", "03", "04", "05"]
 
+# OSTI public records API — no auth required. Used to confirm pre-2007 grants exist
+# when USASpending has no record of them.
+_OSTI_RECORDS_URL = "https://www.osti.gov/api/v1/records"
+# Pre-2007 DE-FG* form: DE-FG02-87ER40315
+_DOE_PRE2007_RE = re.compile(r"^DE-FG\d{2}-\d{2}[A-Z]{2}\d+$")
+
+
+def _osti_confirms_pre2007(award_id: str) -> bool:
+    osti_key = award_id.removeprefix("DE-")
+    try:
+        resp = requests.get(
+            _OSTI_RECORDS_URL,
+            params={"q": osti_key, "rows": 1},
+            timeout=10,
+        )
+        return bool(resp.ok and (resp.json().get("records") or []))
+    except requests.exceptions.RequestException:
+        return False
+
 
 def _parse_doe_date(s: str | None):
     if not s:
@@ -132,12 +151,21 @@ def get_award_details(
 
         results = resp.json().get("results") or []
         if not results:
+            if _DOE_PRE2007_RE.match(award_id) and _osti_confirms_pre2007(award_id):
+                detail = (
+                    "Pre-2007 grant confirmed in OSTI"
+                    " (financial data not available via public APIs)"
+                )
+            elif _DOE_PRE2007_RE.match(award_id):
+                detail = "Not found in USASpending or OSTI"
+            else:
+                detail = "Not found in USASpending"
             not_found.append(
                 AwardNotFound(
                     funder_id=FUNDER_ID,
                     input_text=award_id,
                     reason=NotFoundReason.NOT_FOUND,
-                    detail="Not found in USASpending",
+                    detail=detail,
                 )
             )
             continue

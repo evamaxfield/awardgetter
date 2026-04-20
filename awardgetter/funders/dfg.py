@@ -3,11 +3,18 @@
 import random
 import re
 import time
+import urllib.parse
 from datetime import date
 from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions
+from selenium.webdriver.support.ui import WebDriverWait
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._spec import FunderExamples
@@ -85,6 +92,14 @@ def _make_session() -> requests.Session:
     return session
 
 
+def _make_driver() -> webdriver.Chrome:
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    return webdriver.Chrome(options=options)
+
+
 def _fetch_gepris_project(
     session: requests.Session, gepris_id: str
 ) -> tuple[AwardDetails | None, str | None]:
@@ -127,31 +142,29 @@ def _fetch_gepris_project(
     )
 
 
-def _search_gepris_for_programme(session: requests.Session, programme_code: str) -> str | None:
+def _search_gepris_for_programme(driver: webdriver.Chrome, programme_code: str) -> str | None:
     query = re.sub(r"([A-Z]+)(\d+)", r"\1 \2", programme_code)
+    params = urllib.parse.urlencode(
+        {
+            "task": "showSearchSimple",
+            "context": "projekt",
+            "keywords": query,
+            "language": "en",
+        }
+    )
+    driver.get(f"{_GEPRIS_SEARCH_URL}?{params}")
     try:
-        resp = session.get(
-            _GEPRIS_SEARCH_URL,
-            params={
-                "task": "showSearchSimple",
-                "context": "projekt",
-                "keywords": query,
-                "language": "en",
-            },
-            timeout=15,
+        WebDriverWait(driver, 10).until(
+            expected_conditions.presence_of_element_located(
+                (By.CSS_SELECTOR, "a[href*='/gepris/projekt/']")
+            )
         )
-    except requests.exceptions.RequestException:
+        link = driver.find_element(By.CSS_SELECTOR, "a[href*='/gepris/projekt/']")
+        href = link.get_attribute("href")
+        m = re.search(r"/gepris/projekt/(\d+)", href or "")
+        return m.group(1) if m else None
+    except TimeoutException:
         return None
-
-    if not resp.ok:
-        return None
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-    link = soup.find("a", href=re.compile(r"/gepris/projekt/\d+"))
-    if not link:
-        return None
-    m = re.search(r"/gepris/projekt/(\d+)", str(link["href"]))
-    return m.group(1) if m else None
 
 
 def get_award_details(
@@ -163,41 +176,44 @@ def get_award_details(
     not_found: list[AwardNotFound] = []
 
     session = _make_session()
+    driver = _make_driver()
+    try:
+        for award_id in award_ids:
+            time.sleep(random.uniform(1.0, 2.0))
 
-    for award_id in award_ids:
-        time.sleep(random.uniform(1.0, 2.0))
+            gepris_id = award_id
 
-        gepris_id = award_id
+            if not _GEPRIS_NUMERIC_RE.match(award_id):
+                gepris_id_found = _search_gepris_for_programme(driver, award_id)
+                if gepris_id_found is None:
+                    not_found.append(
+                        AwardNotFound(
+                            funder_id=FUNDER_ID,
+                            input_text=award_id,
+                            reason=NotFoundReason.NOT_FOUND,
+                            detail="No GEPRIS project found for programme code",
+                        )
+                    )
+                    continue
+                gepris_id = gepris_id_found
 
-        if not _GEPRIS_NUMERIC_RE.match(award_id):
-            gepris_id_found = _search_gepris_for_programme(session, award_id)
-            if gepris_id_found is None:
+            details, error = _fetch_gepris_project(session, gepris_id)
+            if details is None:
                 not_found.append(
                     AwardNotFound(
                         funder_id=FUNDER_ID,
                         input_text=award_id,
-                        reason=NotFoundReason.NOT_FOUND,
-                        detail="No GEPRIS project found for programme code",
+                        reason=NotFoundReason.NOT_FOUND
+                        if error == "not_found"
+                        else NotFoundReason.API_ERROR,
+                        detail=error or "Not found",
                     )
                 )
                 continue
-            gepris_id = gepris_id_found
 
-        details, error = _fetch_gepris_project(session, gepris_id)
-        if details is None:
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.NOT_FOUND
-                    if error == "not_found"
-                    else NotFoundReason.API_ERROR,
-                    detail=error or "Not found",
-                )
-            )
-            continue
-
-        found.append(details)
+            found.append(details)
+    finally:
+        driver.quit()
 
     return AwardDetailsResult(found=found, not_found=not_found)
 
@@ -210,16 +226,15 @@ EXAMPLES = FunderExamples(
         # Strings with embedded GEPRIS numeric project IDs — resolvable via direct page fetch.
         "SFB1423 / 421152132 - A07",
         "SFB-TRR 358/1 2023-491392403",
-        # Programme-code-only entries below are recognized by check_award_id but cannot be
-        # resolved by get_award_details (GEPRIS search requires JavaScript). See dfg-issues.md.
-        # "SFB1114/A04",
-        # "SFB 1423",
-        # "EXC 2067/1 (MBExC)",
-        # "RTG 2070",
-        # "FOR 2975",
-        # "GRK2224",
-        # "SPP 2363",
-        # "INST 35/1134-1 FUGG",
+        # Programme-code-only entries — resolved via Selenium-based GEPRIS search.
+        "SFB1114/A04",
+        "SFB 1423",
+        "EXC 2067/1 (MBExC)",
+        "RTG 2070",
+        "FOR 2975",
+        "GRK2224",
+        "SPP 2363",
+        "INST 35/1134-1 FUGG",
     ),
     negative=(
         # Bare GEPRIS numeric IDs — explicitly excluded by the DFG matcher to

@@ -22,5 +22,6 @@ hooks = [
       "polars>=1",
       "pytest>=9",
       "flaky>=3",
+      "selenium>=4",
     ] },
 ]
