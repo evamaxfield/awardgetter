@@ -17,7 +17,7 @@ from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "dfg"
@@ -238,7 +238,12 @@ EXAMPLES = FunderExamples(
         "SPP 2363",
         "INST 35/1134-1 FUGG",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # Programme number 9999 does not exist in GEPRIS.
+        "SFB9999",
+        "EXC9999",
+        "RTG9999",
+    ),
     rejected_ids=(
         # Bare GEPRIS numeric IDs — explicitly excluded by the DFG matcher to
         # avoid colliding with NSF/NSFC/CORDIS. See awardgetter/funders/dfg.py.
@@ -260,5 +265,22 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "ANR-21-CE29-0003",
     ),
-    extraction_texts=(),
+    extraction_texts=(
+        # Two embedded GEPRIS numeric IDs alongside programme codes — both verified.
+        ExtractionExample(
+            text=(
+                "This project was funded by DFG through SFB1423 / 421152132 - A07"
+                " and SFB-TRR 358/1 2023-491392403."
+            ),
+            expected_extracted=("421152132", "491392403"),
+            verified_existing=("421152132", "491392403"),
+        ),
+        # Programme-code-only text — no GEPRIS ID in context, so codes are returned
+        # directly (whitespace collapsed: "RTG 2070" → "RTG2070").
+        ExtractionExample(
+            text="Funded by DFG SFB1114/A04 and RTG 2070.",
+            expected_extracted=("SFB1114", "RTG2070"),
+            verified_existing=(),
+        ),
+    ),
 )

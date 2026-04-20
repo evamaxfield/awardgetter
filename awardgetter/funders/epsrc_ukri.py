@@ -191,7 +191,12 @@ EXAMPLES = FunderExamples(
         # Embedded in surrounding text.
         "MVSE EP/V002856/1",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # Z-prefix references do not exist in the GtR database.
+        "EP/Z999999/1",
+        "MR/Z999999/1",
+        "BB/Z999999/1",
+    ),
     rejected_ids=(
         # Wellcome Trust — not part of UKRI.
         "WT101957",
@@ -219,6 +224,25 @@ EXAMPLES = FunderExamples(
             text="EP/I013067/1 and EP/M025179/1",
             expected_extracted=("EP/I013067/1", "EP/M025179/1"),
             verified_existing=("EP/I013067/1", "EP/M025179/1"),
+        ),
+        # Three UKRI grants across two councils embedded in prose — all verified.
+        ExtractionExample(
+            text=(
+                "Research was supported by EPSRC grants EP/P020259/1, "
+                "MR/R001154/1, and EP/V002856/1."
+            ),
+            expected_extracted=("EP/P020259/1", "MR/R001154/1", "EP/V002856/1"),
+            verified_existing=("EP/P020259/1", "MR/R001154/1", "EP/V002856/1"),
+        ),
+        # EPSRC + ANR mixed text — ANR token contains no bare 7-digit numbers so
+        # _UKRI_NUMERIC_RE does not over-extract.
+        ExtractionExample(
+            text=(
+                "Funded by EPSRC EP/D05592X/1 and ANR-21-CE29-0003, "
+                "with support from EP/I013067/1."
+            ),
+            expected_extracted=("EP/D05592X/1", "EP/I013067/1"),
+            verified_existing=("EP/D05592X/1", "EP/I013067/1"),
         ),
     ),
 )

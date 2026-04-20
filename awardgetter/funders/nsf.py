@@ -7,7 +7,7 @@ from pathlib import Path
 import requests
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "nsf"
@@ -142,7 +142,12 @@ EXAMPLES = FunderExamples(
         # Internal whitespace within the 7 digits is collapsed.
         "NSF 22 11275",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # 7-digit format-valid IDs that are clearly fabricated.
+        "1234567",
+        "9999999",
+        "0000001",
+    ),
     rejected_ids=(
         # Wrong digit counts.
         "62206216",
@@ -153,5 +158,19 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "2022ZD0160401",
     ),
-    extraction_texts=(),
+    extraction_texts=(
+        # Two NSF IDs embedded in prose — both verified via NSF API.
+        ExtractionExample(
+            text="This work was supported by NSF grants 1728743 and 2211275.",
+            expected_extracted=("1728743", "2211275"),
+            verified_existing=("1728743", "2211275"),
+        ),
+        # NSF ID alongside an ANR ID — ANR token has no 7-digit runs so only
+        # the NSF number is returned by the NSF extractor.
+        ExtractionExample(
+            text="Funding from NSF 1728743 and ANR-21-CE29-0003 enabled this research.",
+            expected_extracted=("1728743",),
+            verified_existing=("1728743",),
+        ),
+    ),
 )

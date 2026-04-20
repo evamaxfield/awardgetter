@@ -63,7 +63,12 @@ EXAMPLES = FunderExamples(
         # current matcher does not recognise.
         "KAKENHI Grants JP26282221, JP26120733, JP18H04037, and JP20H05955",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # Serial 99999 is extremely high and won't appear in KAKENHI records.
+        "24K99999",
+        "22H99999",
+        "20N00000",
+    ),
     rejected_ids=(
         # JST grants — different funder entirely.
         "JPMJSP2119",

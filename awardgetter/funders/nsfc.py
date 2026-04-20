@@ -56,7 +56,12 @@ EXAMPLES = FunderExamples(
         # Hyphenated form: numeric prefix is matched even with sub-task suffix.
         "20221279-ZKT03",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # Clearly synthetic 8-digit numbers unlikely to exist in NSFC records.
+        "99999999",
+        "00000001",
+        "12345678",
+    ),
     rejected_ids=(
         # Municipal / provincial funds. The internal letter-digit junctions
         # have no word boundary, so the digit run is never matched.

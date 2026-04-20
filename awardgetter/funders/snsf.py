@@ -7,7 +7,7 @@ import polars as pl
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._cache import get_cached_file
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "snsf"
@@ -188,7 +188,12 @@ EXAMPLES = FunderExamples(
         # Grant number embedded in a descriptive label.
         "Prospective Researcher Fellowship, PBZHP2-147259",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # Serial 999999 does not appear in the SNSF bulk CSV.
+        "200021_999999",
+        "PP00P2_999999",
+        "CRSII5_999999",
+    ),
     rejected_ids=(
         # Programme umbrellas — not single grants.
         "NRP-77",
@@ -204,5 +209,18 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "ANR-21-CE29-0003",
     ),
-    extraction_texts=(),
+    extraction_texts=(
+        # Two underscore-separated SNSF grants in prose — underscore is a word char
+        # so the numeric suffix has no leading \b and _SNSF_NUMERIC_RE won't over-extract.
+        ExtractionExample(
+            text="This research was supported by SNSF grants PZ00P3_180085 and PP00P2_138979.",
+            expected_extracted=("PZ00P3_180085", "PP00P2_138979"),
+            verified_existing=("PZ00P3_180085", "PP00P2_138979"),
+        ),
+        ExtractionExample(
+            text="Funding from SNSF 200021_166275 and 200021_213074 enabled this study.",
+            expected_extracted=("200021_166275", "200021_213074"),
+            verified_existing=("200021_166275", "200021_213074"),
+        ),
+    ),
 )

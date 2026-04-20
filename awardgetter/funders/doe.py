@@ -8,7 +8,7 @@ from pathlib import Path
 import requests
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "doe"
@@ -239,5 +239,18 @@ EXAMPLES = FunderExamples(
         "2022ZD0160401",
         "62206216",
     ),
-    extraction_texts=(),
+    extraction_texts=(
+        # Two DOE Office of Science grants in prose — both confirmed via USASpending.
+        ExtractionExample(
+            text="Support from DE-SC0021358 and DE-SC0016260 enabled this research.",
+            expected_extracted=("DE-SC0021358", "DE-SC0016260"),
+            verified_existing=("DE-SC0021358", "DE-SC0016260"),
+        ),
+        # DOE + NSF mixed text — NSF 1728743 lacks a DE- prefix so only DOE IDs extracted.
+        ExtractionExample(
+            text="Research funded by DE-SC0021358, NSF 1728743, and DE-OE0000895.",
+            expected_extracted=("DE-SC0021358", "DE-OE0000895"),
+            verified_existing=("DE-SC0021358", "DE-OE0000895"),
+        ),
+    ),
 )

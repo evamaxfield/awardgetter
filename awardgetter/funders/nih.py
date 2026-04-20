@@ -7,7 +7,7 @@ from pathlib import Path
 import requests
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "nih"
@@ -254,7 +254,12 @@ EXAMPLES = FunderExamples(
         # Internal whitespace within the project number is tolerated.
         "U24 NS 124001",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # Fake institute codes (ZZ, XX, YY) — format-valid but nonexistent in NIH RePORTER.
+        "R01ZZ999999",
+        "U24XX000001",
+        "T32YY111111",
+    ),
     rejected_ids=(
         "EP/S00923X/1",
         "ANR-21-CE29-0003",
@@ -262,5 +267,18 @@ EXAMPLES = FunderExamples(
         "DFG SFB1114",
         "12345",
     ),
-    extraction_texts=(),
+    extraction_texts=(
+        # Two NIH project numbers in prose — both confirmed via NIH RePORTER.
+        ExtractionExample(
+            text="We acknowledge NIH support under grants U24NS124001 and T32GM007347.",
+            expected_extracted=("U24NS124001", "T32GM007347"),
+            verified_existing=("U24NS124001", "T32GM007347"),
+        ),
+        # Application-type digit and support-year suffix stripped by _base_project_num.
+        ExtractionExample(
+            text="NIH grants 5U24NS124001-05 and 5U24CA086368-25 funded this work.",
+            expected_extracted=("U24NS124001", "U24CA086368"),
+            verified_existing=("U24NS124001", "U24CA086368"),
+        ),
+    ),
 )

@@ -260,7 +260,12 @@ EXAMPLES = FunderExamples(
         "16-IDEX-0004",
         "20-PCPA-0010",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # CE99 is not a real ANR programme code.
+        "ANR-24-CE99-9999",
+        # FAUX is not a real ANR programme code.
+        "ANR-22-FAUX-0001",
+    ),
     rejected_ids=(
         # Acronym-only references — not resolvable as ANR IDs.
         "CogFinAIgent",

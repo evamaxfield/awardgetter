@@ -7,7 +7,7 @@ import polars as pl
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._constants import CORDIS_PARQUET_FILENAME
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "ec_cordis"
@@ -125,8 +125,17 @@ EXAMPLES = FunderExamples(
         "602150",
         "948381",
     ),
-    matching_ids=(),
-    not_found_awards=(),
+    matching_ids=(
+        # 7-digit (overlaps NSF/NSFC by design — CORDIS numeric RE matches any 6-9 digits).
+        "3141592",
+        # 8-digit (overlaps NSFC by design).
+        "31415926",
+    ),
+    not_found_awards=(
+        # 9-digit IDs extremely unlikely to appear in any CORDIS programme.
+        "999999999",
+        "100000000",
+    ),
     rejected_ids=(
         # Acronyms — handled as low-confidence lookups in the spec, but not by
         # the current numeric-only matcher.
@@ -145,5 +154,19 @@ EXAMPLES = FunderExamples(
         # Too short.
         "12345",
     ),
-    extraction_texts=(),
+    extraction_texts=(
+        # Two CORDIS project IDs in prose — both confirmed in the CORDIS parquet.
+        ExtractionExample(
+            text="The projects 101069595 and 602150 received EC Horizon Europe funding.",
+            expected_extracted=("101069595", "602150"),
+            verified_existing=("101069595", "602150"),
+        ),
+        # CORDIS numeric RE also matches the NSF award 2211275 (7 digits) — by design.
+        # verified_existing lists only the confirmed CORDIS projects.
+        ExtractionExample(
+            text="Supported by EC grants 101001318 and 948381, along with NSF award 2211275.",
+            expected_extracted=("101001318", "948381", "2211275"),
+            verified_existing=("101001318", "948381"),
+        ),
+    ),
 )

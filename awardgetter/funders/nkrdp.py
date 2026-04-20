@@ -61,7 +61,12 @@ EXAMPLES = FunderExamples(
         # Youth Scientist Programme variant.
         "2021QNRC001",
     ),
-    not_found_awards=(),
+    not_found_awards=(
+        # Year 2099 is far-future and won't exist in NKRDP records.
+        "2099ZD9999999",
+        "2099YFA9999999",
+        "2099AAA9999",
+    ),
     rejected_ids=(
         # Possibly a provincial fund — does not match the NKRDP code set.
         "B16003",
