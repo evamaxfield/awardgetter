@@ -76,6 +76,33 @@ def extract_award_ids(text: str) -> list[str]:
     return _UKRI_RE.findall(s) + _UKRI_NUMERIC_RE.findall(s)
 
 
+def _request_with_404_retry(award_id: str) -> tuple[requests.Response, str]:
+    """Make a GtR API request, retrying with /1 suffix on 404 if needed.
+
+    Returns (response, effective_award_id). Raises RequestException on network error.
+    """
+    resp = requests.get(
+        _GTR_API_URL.format(ref=award_id),
+        headers={"Accept": "application/json"},
+        timeout=30,
+    )
+    # Retry with /1 suffix if the reference has no trailing serial number.
+    # Many truncated references (e.g. EP/F067496) are simply missing the /1.
+    if resp.status_code == 404 and not re.search(r"/\d+$", award_id):
+        retried_id = award_id + "/1"
+        try:
+            retried = requests.get(
+                _GTR_API_URL.format(ref=retried_id),
+                headers={"Accept": "application/json"},
+                timeout=30,
+            )
+            if retried.ok:
+                return retried, retried_id
+        except requests.exceptions.RequestException:
+            pass
+    return resp, award_id
+
+
 def get_award_details(
     award_ids: list[str],
     cache_dir: Path,
@@ -89,11 +116,7 @@ def get_award_details(
             time.sleep(_GTR_RATE_LIMIT_SLEEP)
 
         try:
-            resp = requests.get(
-                _GTR_API_URL.format(ref=award_id),
-                headers={"Accept": "application/json"},
-                timeout=30,
-            )
+            resp, award_id = _request_with_404_retry(award_id)
         except requests.exceptions.RequestException as exc:
             not_found.append(
                 AwardNotFound(
@@ -104,33 +127,6 @@ def get_award_details(
                 )
             )
             continue
-
-        if resp.status_code == 404:
-            # Retry with /1 suffix if the reference has no trailing serial number.
-            # Many truncated references (e.g. EP/F067496) are simply missing the /1.
-            if not re.search(r"/\d+$", award_id):
-                retried_id = award_id + "/1"
-                try:
-                    resp = requests.get(
-                        _GTR_API_URL.format(ref=retried_id),
-                        headers={"Accept": "application/json"},
-                        timeout=30,
-                    )
-                    if resp.ok:
-                        award_id = retried_id
-                    # If retry also fails, fall through to not-found handling below.
-                except requests.exceptions.RequestException:
-                    pass
-            if not resp.ok:
-                not_found.append(
-                    AwardNotFound(
-                        funder_id=FUNDER_ID,
-                        input_text=award_id,
-                        reason=NotFoundReason.NOT_FOUND,
-                        detail="Grant reference not found in GtR",
-                    )
-                )
-                continue
 
         if resp.status_code == 429:
             not_found.append(
@@ -144,12 +140,17 @@ def get_award_details(
             continue
 
         if not resp.ok:
+            is_404 = resp.status_code == 404
+            reason = NotFoundReason.NOT_FOUND if is_404 else NotFoundReason.API_ERROR
+            detail = (
+                "Grant reference not found in GtR" if is_404 else f"HTTP {resp.status_code}"
+            )
             not_found.append(
                 AwardNotFound(
                     funder_id=FUNDER_ID,
                     input_text=award_id,
-                    reason=NotFoundReason.API_ERROR,
-                    detail=f"HTTP {resp.status_code}",
+                    reason=reason,
+                    detail=detail,
                 )
             )
             continue

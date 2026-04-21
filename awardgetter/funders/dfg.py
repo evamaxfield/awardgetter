@@ -4,6 +4,7 @@ import random
 import re
 import time
 import urllib.parse
+from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
 
@@ -60,6 +61,27 @@ def check_award_id(text: str) -> bool:
     return bool(_DFG_RE.search(s))
 
 
+def _collect_unique(items: Iterable[str], seen: set[str], results: list[str]) -> None:
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            results.append(item)
+
+
+def _extract_ids_from_programme(s: str, prog_match: re.Match) -> list[str]:
+    ctx_start = max(0, prog_match.start() - 60)
+    ctx_end = min(len(s), prog_match.end() + 60)
+    context = s[ctx_start:ctx_end]
+    prog_num_m = _PROG_NUM_RE.search(prog_match.group())
+    prog_num = prog_num_m.group() if prog_num_m else ""
+    gepris_ids = [
+        n for n in _GEPRIS_EMBEDDED_RE.findall(context) if n != prog_num and len(n) >= 7
+    ]
+    if gepris_ids:
+        return gepris_ids
+    return [re.sub(r"\s+", "", prog_match.group().strip().upper())]
+
+
 def extract_award_ids(text: str) -> list[str]:
     s = normalize_dashes(text)
     seen: set[str] = set()
@@ -70,43 +92,17 @@ def extract_award_ids(text: str) -> list[str]:
         return [s.strip()]
 
     # "project ID XXXXXXXXX" or "ID XXXXXXXXX" pattern.
-    for gid in _GEPRIS_ID_PREFIX_RE.findall(s):
-        if gid not in seen:
-            seen.add(gid)
-            results.append(gid)
+    _collect_unique(_GEPRIS_ID_PREFIX_RE.findall(s), seen, results)
     if results:
         return results
 
     for prog_match in _DFG_RE.finditer(s):
-        ctx_start = max(0, prog_match.start() - 60)
-        ctx_end = min(len(s), prog_match.end() + 60)
-        context = s[ctx_start:ctx_end]
-
-        prog_num_m = _PROG_NUM_RE.search(prog_match.group())
-        prog_num = prog_num_m.group() if prog_num_m else ""
-
-        gepris_ids = [
-            n for n in _GEPRIS_EMBEDDED_RE.findall(context) if n != prog_num and len(n) >= 7
-        ]
-
-        if gepris_ids:
-            for gid in gepris_ids:
-                if gid not in seen:
-                    seen.add(gid)
-                    results.append(gid)
-        else:
-            prog_code = re.sub(r"\s+", "", prog_match.group().strip().upper())
-            if prog_code not in seen:
-                seen.add(prog_code)
-                results.append(prog_code)
+        _collect_unique(_extract_ids_from_programme(s, prog_match), seen, results)
 
     # Fallback: if no programme code found, extract any 7-9 digit number as a
     # potential GEPRIS ID (converts PARSE_ERROR → NOT_FOUND for bare numeric inputs).
     if not results:
-        for gid in _GEPRIS_EMBEDDED_RE.findall(s):
-            if gid not in seen:
-                seen.add(gid)
-                results.append(gid)
+        _collect_unique(_GEPRIS_EMBEDDED_RE.findall(s), seen, results)
 
     return results
 

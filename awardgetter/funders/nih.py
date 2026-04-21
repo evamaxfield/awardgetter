@@ -175,7 +175,10 @@ def _normalize_activity_code(s: str) -> str:
 
 
 def _zero_pad_serial(s: str) -> str:
-    """Zero-pad the terminal serial number to 6 digits when it is shorter (e.g. R01GM60595 → R01GM060595)."""
+    """Zero-pad the terminal serial number to 6 digits when shorter.
+
+    E.g. R01GM60595 → R01GM060595.
+    """
     m = _ZERO_PAD_SERIAL_RE.search(s)
     if m and len(m.group(2)) < 6:
         return s[: m.start()] + m.group(1) + m.group(2).zfill(6)
