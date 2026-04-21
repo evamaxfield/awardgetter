@@ -20,8 +20,13 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 # Matches post-2007 form (DE-SC0021358, DE-OE0000895) and pre-2007 form
 # (DE-FG02-87ER40315, DE-AC02-05CH11231). Accepts a missing hyphen after
-# "DE" (DEAC05-00OR22725) as seen in real acknowledgements.
-_DOE_RE = re.compile(r"\bDE-?[A-Z]{2}\d+(?:-\d{2}[A-Z]{2}\d+)?\b")
+# "DE" (DEAC05-00OR22725) as seen in real acknowledgements. The optional
+# group allows an extra hyphen before the site code (DE-AC02-05-CH11231)
+# and 2-3 letter site codes (DE-AC06-76RLO1830).
+_DOE_RE = re.compile(r"\bDE-?[A-Z]{2}\d+(?:-\d{2,3}-?[A-Z]{2,3}\d+)?\b")
+
+# Strips "No." / "No. " prefix sometimes written before DOE award numbers.
+_NO_PREFIX_RE = re.compile(r"^\s*[Nn]o\.?\s+")
 
 # Management & Operating contracts: DE-AC{NN}-{YY}{XX}{NNNNN}
 # These are lab-wide umbrella contracts, not individual research grants.
@@ -64,11 +69,13 @@ def _parse_doe_date(s: str | None):
 
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
+    s = _NO_PREFIX_RE.sub("", s)
     return bool(_DOE_RE.search(s))
 
 
 def extract_award_ids(text: str) -> list[str]:
     s = normalize_dashes(text)
+    s = _NO_PREFIX_RE.sub("", s)
     seen: set[str] = set()
     results: list[str] = []
     for m in _DOE_RE.finditer(s):
@@ -224,6 +231,12 @@ EXAMPLES = FunderExamples(
         "DE-AC05-00OR22725",
         # M&O variant with missing DE- hyphen -- normalize_dashes handles it.
         "DEAC05-00OR22725",
+        # Extra hyphen before site code — now accepted by extended regex.
+        "DE-AC02-05-CH11231",
+        # 3-letter site code (RLO = PNNL).
+        "DE-AC06-76RLO1830",
+        # "No." prefix stripped before matching.
+        "No. DE-AC02-05-CH11231",
     ),
     rejected_ids=(
         # BER programme tracking codes — not award numbers.

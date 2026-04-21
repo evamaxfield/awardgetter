@@ -27,7 +27,7 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 _SNSF_RE = re.compile(
     # Well-known SNSF programme prefixes — separator optional, serial 5-7 digits.
     r"\b(?:"
-    r"200021L?|200020|51NF40|CRSII\d?|PP00P\d?|PZ00P\d?|PDFMP\d?"
+    r"200021L?|200020|51NF40|CRSII\d?|CRSK(?:-?\d)?|PP00P\d?|PP\d{4}|PZ00P\d?|PDFMP\d?"
     r"|PBZHP\d?|P\d{3}[A-Z]+|IZ[A-Z]+\d*|CR\d+I\d*"
     r")[_\s-]?\d{5,7}\b"
     # P + single digit + 2-7 alphanumeric chars (P5R5PB, P2NEP2) — mandatory separator.
@@ -207,6 +207,10 @@ EXAMPLES = FunderExamples(
         "P2NEP2_191663",
         # Composite numeric prefix with hyphen separator.
         "205321-144529",
+        # CRSK programme series (CRSK-2 = phase indicator, space separator).
+        "CRSK-2 190840",
+        # PP + 4-digit variant (PP0022 style).
+        "PP0022-118866",
     ),
     not_found_awards=(
         # Serial 999999 does not appear in the SNSF bulk CSV.

@@ -4,18 +4,11 @@ import random
 import re
 import time
 import urllib.parse
-from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions
-from selenium.webdriver.support.ui import WebDriverWait
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._spec import ExtractionExample, FunderExamples
@@ -61,7 +54,7 @@ def check_award_id(text: str) -> bool:
     return bool(_DFG_RE.search(s))
 
 
-def _collect_unique(items: Iterable[str], seen: set[str], results: list[str]) -> None:
+def _collect_unique(items: list[str], seen: set[str], results: list[str]) -> None:
     for item in items:
         if item not in seen:
             seen.add(item)
@@ -115,14 +108,6 @@ def _make_session() -> requests.Session:
     return session
 
 
-def _make_driver() -> webdriver.Chrome:
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    return webdriver.Chrome(options=options)
-
-
 def _fetch_gepris_project(
     session: requests.Session, gepris_id: str
 ) -> tuple[AwardDetails | None, str | None]:
@@ -165,29 +150,29 @@ def _fetch_gepris_project(
     )
 
 
-def _search_gepris_for_programme(driver: webdriver.Chrome, programme_code: str) -> str | None:
+def _search_gepris_for_programme(session: requests.Session, programme_code: str) -> list[str]:
+    """Return unique GEPRIS project IDs matching programme_code, or [] if none found."""
     query = re.sub(r"([A-Z]+)(\d+)", r"\1 \2", programme_code)
     params = urllib.parse.urlencode(
         {
-            "task": "showSearchSimple",
+            "task": "doSearchSimple",
             "context": "projekt",
-            "keywords": query,
+            "keywords_criterion": query,
+            "nurProjekteMitAB": "false",
             "language": "en",
         }
     )
-    driver.get(f"{_GEPRIS_SEARCH_URL}?{params}")
     try:
-        WebDriverWait(driver, 10).until(
-            expected_conditions.presence_of_element_located(
-                (By.CSS_SELECTOR, "a[href*='/gepris/projekt/']")
-            )
-        )
-        link = driver.find_element(By.CSS_SELECTOR, "a[href*='/gepris/projekt/']")
-        href = link.get_attribute("href")
-        m = re.search(r"/gepris/projekt/(\d+)", href or "")
-        return m.group(1) if m else None
-    except TimeoutException:
-        return None
+        resp = session.get(f"{_GEPRIS_SEARCH_URL}?{params}", timeout=15)
+    except requests.exceptions.RequestException:
+        return []
+    if not resp.ok:
+        return []
+    seen: list[str] = []
+    for m in re.finditer(r'href="/gepris/projekt/(\d+)"', resp.text):
+        if m.group(1) not in seen:
+            seen.append(m.group(1))
+    return seen
 
 
 def get_award_details(
@@ -199,44 +184,51 @@ def get_award_details(
     not_found: list[AwardNotFound] = []
 
     session = _make_session()
-    driver = _make_driver()
-    try:
-        for award_id in award_ids:
-            time.sleep(random.uniform(1.0, 2.0))
+    for award_id in award_ids:
+        time.sleep(random.uniform(0.5, 1.0))
 
-            gepris_id = award_id
+        gepris_id = award_id
 
-            if not _GEPRIS_NUMERIC_RE.match(award_id):
-                gepris_id_found = _search_gepris_for_programme(driver, award_id)
-                if gepris_id_found is None:
-                    not_found.append(
-                        AwardNotFound(
-                            funder_id=FUNDER_ID,
-                            input_text=award_id,
-                            reason=NotFoundReason.NOT_FOUND,
-                            detail="No GEPRIS project found for programme code",
-                        )
-                    )
-                    continue
-                gepris_id = gepris_id_found
-
-            details, error = _fetch_gepris_project(session, gepris_id)
-            if details is None:
+        if not _GEPRIS_NUMERIC_RE.match(award_id):
+            candidates = _search_gepris_for_programme(session, award_id)
+            if not candidates:
                 not_found.append(
                     AwardNotFound(
                         funder_id=FUNDER_ID,
                         input_text=award_id,
-                        reason=NotFoundReason.NOT_FOUND
-                        if error == "not_found"
-                        else NotFoundReason.API_ERROR,
-                        detail=error or "Not found",
+                        reason=NotFoundReason.NOT_FOUND,
+                        detail="No GEPRIS project found for programme code",
                     )
                 )
                 continue
+            if len(candidates) > 1:
+                # TODO: decide how to handle multiple GEPRIS results for a programme code
+                not_found.append(
+                    AwardNotFound(
+                        funder_id=FUNDER_ID,
+                        input_text=award_id,
+                        reason=NotFoundReason.AMBIGUOUS,
+                        detail=f"Multiple GEPRIS projects match: {', '.join(candidates)}",
+                    )
+                )
+                continue
+            gepris_id = candidates[0]
 
-            found.append(details)
-    finally:
-        driver.quit()
+        details, error = _fetch_gepris_project(session, gepris_id)
+        if details is None:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.NOT_FOUND
+                    if error == "not_found"
+                    else NotFoundReason.API_ERROR,
+                    detail=error or "Not found",
+                )
+            )
+            continue
+
+        found.append(details)
 
     return AwardDetailsResult(found=found, not_found=not_found)
 
@@ -251,7 +243,7 @@ EXAMPLES = FunderExamples(
         "SFB-TRR 358/1 2023-491392403",
     ),
     matching_ids=(
-        # Programme-code-only entries — require Selenium-based GEPRIS search to resolve.
+        # Programme-code-only entries — resolved via GEPRIS keyword search (doSearchSimple).
         "SFB1114/A04",
         "SFB 1423",
         "EXC 2067/1 (MBExC)",

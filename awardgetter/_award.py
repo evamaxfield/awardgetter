@@ -11,6 +11,7 @@ class NotFoundReason(enum.Enum):
     API_ERROR = "api_error"
     CACHE_ERROR = "cache_error"
     RATE_LIMITED = "rate_limited"
+    AMBIGUOUS = "ambiguous"
 
 
 @dataclass(frozen=True)
