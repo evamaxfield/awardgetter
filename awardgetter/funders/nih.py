@@ -94,6 +94,8 @@ _STRIP_SUPPORT_YEAR_RE = re.compile(r"-\d{1,2}[A-Z]*$")
 _FIX_ACTIVITY_O_RE = re.compile(r"^([A-Z])O(\d[A-Z]{2})")
 _ZERO_PAD_SERIAL_RE = re.compile(r"([A-Z]{2})(\d+)$")
 _NIH_BARE_SERIAL_RE = re.compile(r"\b[A-Z]{2}\d{5,6}\b")
+# Detects a bare institute+serial after extraction (no activity code prefix).
+_IS_BARE_SERIAL_RE = re.compile(r"^[A-Z]{2}\d{5,6}$")
 
 
 def _parse_nih_date(s: str | None):
@@ -103,6 +105,44 @@ def _parse_nih_date(s: str | None):
         return datetime.fromisoformat(s).date()
     except ValueError:
         return None
+
+
+def _fetch_nih_wildcard(bare_serial: str) -> tuple[list[dict], AwardNotFound | None]:
+    """Query NIH RePORTER with a wildcard for a bare institute+serial (e.g. GM061300).
+
+    Returns all matching project rows and any error, or an AwardNotFound on failure.
+    The wildcard ``%GM061300`` matches any project number ending in that serial regardless
+    of activity code (R01, K01, P30, etc.).
+    """
+    try:
+        resp = requests.post(
+            _NIH_REPORTER_URL,
+            json={"criteria": {"project_nums": [f"%{bare_serial}"]}, "limit": _NIH_BATCH_SIZE},
+            timeout=30,
+        )
+    except requests.exceptions.RequestException as exc:
+        return [], AwardNotFound(
+            funder_id=FUNDER_ID,
+            input_text=bare_serial,
+            reason=NotFoundReason.API_ERROR,
+            detail=str(exc),
+        )
+
+    if resp.status_code == 429:
+        return [], AwardNotFound(
+            funder_id=FUNDER_ID,
+            input_text=bare_serial,
+            reason=NotFoundReason.RATE_LIMITED,
+            detail="HTTP 429",
+        )
+    if not resp.ok:
+        return [], AwardNotFound(
+            funder_id=FUNDER_ID,
+            input_text=bare_serial,
+            reason=NotFoundReason.API_ERROR,
+            detail=f"HTTP {resp.status_code}",
+        )
+    return resp.json().get("results", []), None
 
 
 def _fetch_nih_batch(
@@ -186,7 +226,8 @@ def _zero_pad_serial(s: str) -> str:
 
 
 def check_award_id(text: str) -> bool:
-    return bool(_NIH_CORE_PATTERN.search(_normalize(text)))
+    normalized = _normalize(text)
+    return bool(_NIH_CORE_PATTERN.search(normalized) or _NIH_BARE_SERIAL_RE.search(normalized))
 
 
 def extract_award_ids(text: str) -> list[str]:
@@ -203,6 +244,28 @@ def extract_award_ids(text: str) -> list[str]:
     return results
 
 
+def _aggregate_rows(award_id: str, rows: list[dict]) -> AwardDetails:
+    amounts = [r["award_amount"] for r in rows if r.get("award_amount")]
+    starts = [
+        _parse_nih_date(r.get("project_start_date"))
+        for r in rows
+        if r.get("project_start_date")
+    ]
+    ends = [
+        _parse_nih_date(r.get("project_end_date")) for r in rows if r.get("project_end_date")
+    ]
+    starts_clean = [d for d in starts if d is not None]
+    ends_clean = [d for d in ends if d is not None]
+    return AwardDetails(
+        funder_id=FUNDER_ID,
+        award_id=award_id,
+        amount_funded=sum(amounts) if amounts else None,
+        currency="USD",
+        start_date=min(starts_clean) if starts_clean else None,
+        end_date=max(ends_clean) if ends_clean else None,
+    )
+
+
 def get_award_details(
     award_ids: list[str],
     cache_dir: Path,
@@ -211,9 +274,15 @@ def get_award_details(
     found: list[AwardDetails] = []
     not_found: list[AwardNotFound] = []
 
+    # Partition: bare institute+serial IDs (no activity code) use a wildcard query;
+    # full project numbers use the standard batch lookup.
+    bare_serials = [aid for aid in award_ids if _IS_BARE_SERIAL_RE.match(aid)]
+    normal_ids = [aid for aid in award_ids if not _IS_BARE_SERIAL_RE.match(aid)]
+
+    # Standard batch lookup for full project numbers.
     all_results: list[dict] = []
-    for i in range(0, len(award_ids), _NIH_BATCH_SIZE):
-        batch_results, batch_errors = _fetch_nih_batch(award_ids[i : i + _NIH_BATCH_SIZE])
+    for i in range(0, len(normal_ids), _NIH_BATCH_SIZE):
+        batch_results, batch_errors = _fetch_nih_batch(normal_ids[i : i + _NIH_BATCH_SIZE])
         all_results.extend(batch_results)
         not_found.extend(batch_errors)
 
@@ -222,7 +291,7 @@ def get_award_details(
         base = _base_project_num(row.get("project_num", ""))
         groups.setdefault(base, []).append(row)
 
-    for award_id in award_ids:
+    for award_id in normal_ids:
         base = _base_project_num(award_id)
         rows = groups.get(base)
         if not rows:
@@ -235,31 +304,31 @@ def get_award_details(
                 )
             )
             continue
+        found.append(_aggregate_rows(base, rows))
 
-        amounts = [r["award_amount"] for r in rows if r.get("award_amount")]
-        starts = [
-            _parse_nih_date(r.get("project_start_date"))
-            for r in rows
-            if r.get("project_start_date")
-        ]
-        ends = [
-            _parse_nih_date(r.get("project_end_date"))
-            for r in rows
-            if r.get("project_end_date")
-        ]
-        starts_clean = [d for d in starts if d is not None]
-        ends_clean = [d for d in ends if d is not None]
-
-        found.append(
-            AwardDetails(
-                funder_id=FUNDER_ID,
-                award_id=base,
-                amount_funded=sum(amounts) if amounts else None,
-                currency="USD",
-                start_date=min(starts_clean) if starts_clean else None,
-                end_date=max(ends_clean) if ends_clean else None,
+    # Wildcard lookup for bare institute+serial IDs (e.g. GM061300 → %GM061300).
+    for bare_serial in bare_serials:
+        rows, error = _fetch_nih_wildcard(bare_serial)
+        if error is not None:
+            not_found.append(error)
+            continue
+        if not rows:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=bare_serial,
+                    reason=NotFoundReason.NOT_FOUND,
+                    detail="No matching project in NIH RePORTER (wildcard search)",
+                )
             )
-        )
+            continue
+        # Group wildcard results by base project number and emit one AwardDetails per group.
+        wc_groups: dict[str, list[dict]] = {}
+        for row in rows:
+            base = _base_project_num(row.get("project_num", ""))
+            wc_groups.setdefault(base, []).append(row)
+        for base, base_rows in wc_groups.items():
+            found.append(_aggregate_rows(base, base_rows))
 
     return AwardDetailsResult(found=found, not_found=not_found)
 
@@ -278,6 +347,9 @@ EXAMPLES = FunderExamples(
         "5U24CA086368-25",
     ),
     matching_ids=(
+        # Bare institute+serial without activity code — matched by fallback pattern.
+        "GM061300",
+        "NS095892",
         # NIH agency word and bracketed text are stripped before matching.
         "[NIH] U24NS124001",
         "NIH U24NS124001",
@@ -295,6 +367,8 @@ EXAMPLES = FunderExamples(
         "R01ZZ999999",
         "U24XX000001",
         "T32YY111111",
+        # Bare institute+serial that doesn't exist under any activity code.
+        "ZZ999999",
     ),
     rejected_ids=(
         "EP/S00923X/1",

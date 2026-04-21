@@ -35,6 +35,12 @@ _CONTRACT_PREFIX_RE = re.compile(r"^\s*[Cc]ontract\s+")
 # Bare SC\d+ IDs missing the "DE-" prefix (e.g. SC0010008 → DE-SC0010008).
 _DOE_SC_BARE_RE = re.compile(r"(?<![A-Z\-])SC(\d{7,10})\b", re.IGNORECASE)
 
+# Bare AC\d{2}-... IDs where "DE-" prefix was cut off (e.g. AC05-06OR23177 → DE-AC05-06OR23177).
+# Negative lookbehind prevents matching when already preceded by "DE-" or another letter.
+_DOE_AC_BARE_RE = re.compile(r"(?<![A-Z\d])AC(\d{2}[-])", re.IGNORECASE)
+# Leading hyphen before AC (e.g. "-AC02-05CH11231").
+_DOE_LEADING_HYPHEN_RE = re.compile(r"^-AC\d{2}-", re.IGNORECASE)
+
 # Management & Operating contracts: DE-AC{NN}-{YY}{XX}{NNNNN}
 # These are lab-wide umbrella contracts, not individual research grants.
 _DOE_MO_RE = re.compile(r"^DE-AC\d{2}-\d{2}[A-Z]{2}\d+$")
@@ -81,6 +87,11 @@ def _normalize_doe(text: str) -> str:
     s = _CONTRACT_PREFIX_RE.sub("", s)
     s = _NO_PREFIX_RE.sub("", s)
     s = _DOE_PREFIX_RE.sub("DE-", s)
+    # Strip a leading "-" before bare AC\d{2}- (e.g. "-AC02-05CH11231" → "AC02-05CH11231").
+    if _DOE_LEADING_HYPHEN_RE.match(s):
+        s = s[1:]
+    # Prepend "DE-" to bare AC\d{2}- patterns missing the prefix.
+    s = _DOE_AC_BARE_RE.sub(r"DE-AC\1", s)
     return s
 
 
@@ -257,6 +268,9 @@ EXAMPLES = FunderExamples(
         # "Contract [No.]" prefix stripped before matching.
         "Contract DE-SC0021358",
         "Contract No. DE-SC0021358",
+        # Bare AC\d{2}- with missing DE- prefix — normalised to DE-AC... before matching.
+        "AC05-06OR23177",
+        "-AC02-05CH11231",
     ),
     not_found_awards=(
         # Bare SC ID that normalises but grant does not exist in USASpending.
@@ -274,6 +288,10 @@ EXAMPLES = FunderExamples(
         "No. DE-AC02-05-CH11231",
         # DOE- prefix normalised to DE-.
         "DOE-AC02-05CH11231",
+        # Bare AC\d{2}- with missing DE- — normalised to DE-AC... → M&O contract → NOT_FOUND.
+        "AC05-06OR23177",
+        "-AC02-05CH11231",
+        "AC02-05-CH11231",
     ),
     rejected_ids=(
         # BER programme tracking codes — not award numbers.
@@ -281,8 +299,6 @@ EXAMPLES = FunderExamples(
         # Numeric-only / label-only inputs.
         "62201",
         "COVID-19",
-        # Missing "DE" prefix — matcher does not synthesise it.
-        "-AC36-08GO28308",
         # Cross-funder distractors.
         "EP/S00923X/1",
         "ANR-21-CE29-0003",

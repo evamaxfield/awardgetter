@@ -55,6 +55,12 @@ _STRIP_SUFFIX_RE = re.compile(r"/\d+$")
 # Normalize the hyphen or space separator between programme prefix and numeric ID
 # to underscore, which is the canonical form used in the SNSF bulk CSV.
 _NORMALIZE_SEP_RE = re.compile(r"^([A-Z0-9]+)[-\s](\d)")
+# Detect known SNSF programme prefixes concatenated directly with their serial (no separator),
+# e.g. PZ00P2168016 → PZ00P2_168016. Must mirror the prefix list in _SNSF_RE.
+_SNSF_PREFIX_DIRECT_RE = re.compile(
+    r"^(200021L?|200020|51NF40|CRSII\d?|CRSK(?:-?\d)?|PP00P\d?|PP\d{4}|PZ00P\d?|PDFMP\d?"
+    r"|PBZHP\d?|P\d{3}[A-Z]+|IZ[A-Z]+\d*|CR\d+I\d*)(\d{4,7})$"
+)
 
 
 def _parse_snsf_date(s: str | None):
@@ -72,6 +78,10 @@ def _parse_snsf_date(s: str | None):
 def _clean_grant_number(raw: str) -> str:
     s = _STRIP_HASH_RE.sub("", raw.strip())
     s = _STRIP_SUFFIX_RE.sub("", s)
+    # Insert underscore for known prefixes directly concatenated with their serial.
+    m = _SNSF_PREFIX_DIRECT_RE.match(s)
+    if m:
+        return m.group(1) + "_" + m.group(2)
     return _NORMALIZE_SEP_RE.sub(r"\1_\2", s)
 
 
@@ -211,6 +221,8 @@ EXAMPLES = FunderExamples(
         "P2NEP2_191663",
         # Composite numeric prefix with hyphen separator.
         "205321-144529",
+        # Missing separator — known prefix directly concatenated with serial.
+        "PZ00P2168016",
         # CRSK programme series (CRSK-2 = phase indicator, space separator).
         "CRSK-2 190840",
         # PP + 4-digit variant (PP0022 style).

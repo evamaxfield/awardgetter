@@ -58,6 +58,15 @@ _TERM_FROM_TO_RE = re.compile(r"Term from (\d{4}) to (\d{4})", re.IGNORECASE)
 _TERM_SINCE_RE = re.compile(r"Term since (\d{4})", re.IGNORECASE)
 _PROG_NUM_RE = re.compile(r"\d+")
 
+# Sub-project suffix: letter(s) + 1-3 digits optionally followed by a lowercase letter,
+# e.g. B02, A04, C01, TP B05. Appears after the main programme code.
+_DFG_SUBPROJECT_RE = re.compile(r"\b([A-Z]\d{1,3}[a-z]?)\b")
+# Separator between encoded programme code and subproject (internal only).
+_DFG_SUBPROJECT_SEP = "#"
+_DFG_SUBPROJECT_ENCODED_RE = re.compile(r"^(.+)#([A-Z]\d{1,3}[a-z]?)$")
+# Matches a subproject code in parentheses at the end of a GEPRIS h1, e.g. "(B02)".
+_DFG_SUBPROJECT_IN_H1_RE_TEMPLATE = r"\({code}\)\s*$"
+
 
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
@@ -82,7 +91,17 @@ def _extract_ids_from_programme(s: str, prog_match: re.Match) -> list[str]:
     ]
     if gepris_ids:
         return gepris_ids
-    return [re.sub(r"\s+", "", prog_match.group().strip().upper())]
+
+    programme_code = re.sub(r"\s+", "", prog_match.group().strip().upper())
+
+    # Look for a sub-project code in the text immediately after the programme match
+    # (within 20 chars), e.g. "SFB 1449 B02" → encode as "SFB1449#B02".
+    after = s[prog_match.end() : prog_match.end() + 20]
+    sub_m = _DFG_SUBPROJECT_RE.search(after)
+    if sub_m:
+        return [programme_code + _DFG_SUBPROJECT_SEP + sub_m.group(1)]
+
+    return [programme_code]
 
 
 def extract_award_ids(text: str) -> list[str]:
@@ -221,6 +240,83 @@ def _filter_candidates_by_programme_code(
     return matched
 
 
+def _filter_candidates_by_subproject_code(
+    session: requests.Session,
+    subproject_code: str,
+    candidates: list[str],
+) -> list[str]:
+    """Return candidates whose GEPRIS h1 ends with ({subproject_code}) in parentheses."""
+    pattern = re.compile(
+        _DFG_SUBPROJECT_IN_H1_RE_TEMPLATE.format(code=re.escape(subproject_code)),
+        re.IGNORECASE,
+    )
+    matched = []
+    for gepris_id in candidates:
+        time.sleep(random.uniform(0.3, 0.6))
+        url = f"{_GEPRIS_BASE_URL}/{gepris_id}?language=en"
+        try:
+            resp = session.get(url, timeout=15)
+        except requests.exceptions.RequestException:
+            continue
+        if not resp.ok:
+            continue
+        soup = BeautifulSoup(resp.text, "html.parser")
+        h1 = soup.select_one("div.details h1")
+        if h1 and pattern.search(h1.get_text(" ", strip=True)):
+            matched.append(gepris_id)
+    return matched
+
+
+def _resolve_programme_to_gepris_id(
+    session: requests.Session,
+    award_id: str,
+) -> tuple[str | None, AwardNotFound | None]:
+    """Resolve a programme code (or programme#subproject) to a single GEPRIS project ID.
+
+    Returns (gepris_id, None) on success or (None, AwardNotFound) on failure.
+    """
+    sub_m = _DFG_SUBPROJECT_ENCODED_RE.match(award_id)
+    programme_code = sub_m.group(1) if sub_m else award_id
+    subproject_code = sub_m.group(2) if sub_m else None
+
+    candidates = _search_gepris_for_programme(session, programme_code)
+    if not candidates:
+        return None, AwardNotFound(
+            funder_id=FUNDER_ID,
+            input_text=award_id,
+            reason=NotFoundReason.NOT_FOUND,
+            detail="No GEPRIS project found for programme code",
+        )
+
+    if subproject_code:
+        candidates = _filter_candidates_by_subproject_code(session, subproject_code, candidates)
+        if not candidates:
+            return None, AwardNotFound(
+                funder_id=FUNDER_ID,
+                input_text=award_id,
+                reason=NotFoundReason.NOT_FOUND,
+                detail=f"No GEPRIS project has ({subproject_code}) in its title",
+            )
+    elif len(candidates) > 1:
+        candidates = _filter_candidates_by_programme_code(session, programme_code, candidates)
+        if not candidates:
+            return None, AwardNotFound(
+                funder_id=FUNDER_ID,
+                input_text=award_id,
+                reason=NotFoundReason.NOT_FOUND,
+                detail="No GEPRIS project has this programme code in its title",
+            )
+
+    if len(candidates) > 1:
+        return None, AwardNotFound(
+            funder_id=FUNDER_ID,
+            input_text=award_id,
+            reason=NotFoundReason.AMBIGUOUS,
+            detail=f"Multiple GEPRIS projects match in h1: {', '.join(candidates)}",
+        )
+    return candidates[0], None
+
+
 def get_award_details(
     award_ids: list[str],
     cache_dir: Path,
@@ -233,45 +329,15 @@ def get_award_details(
     for award_id in award_ids:
         time.sleep(random.uniform(0.5, 1.0))
 
-        gepris_id = award_id
-
-        if not _GEPRIS_NUMERIC_RE.match(award_id):
-            candidates = _search_gepris_for_programme(session, award_id)
-            if not candidates:
-                not_found.append(
-                    AwardNotFound(
-                        funder_id=FUNDER_ID,
-                        input_text=award_id,
-                        reason=NotFoundReason.NOT_FOUND,
-                        detail="No GEPRIS project found for programme code",
-                    )
-                )
+        if _GEPRIS_NUMERIC_RE.match(award_id):
+            gepris_id: str = award_id
+        else:
+            resolved, error = _resolve_programme_to_gepris_id(session, award_id)
+            if error is not None:
+                not_found.append(error)
                 continue
-            if len(candidates) > 1:
-                candidates = _filter_candidates_by_programme_code(session, award_id, candidates)
-                if not candidates:
-                    not_found.append(
-                        AwardNotFound(
-                            funder_id=FUNDER_ID,
-                            input_text=award_id,
-                            reason=NotFoundReason.NOT_FOUND,
-                            detail="No GEPRIS project has this programme code in its title",
-                        )
-                    )
-                    continue
-                if len(candidates) > 1:
-                    not_found.append(
-                        AwardNotFound(
-                            funder_id=FUNDER_ID,
-                            input_text=award_id,
-                            reason=NotFoundReason.AMBIGUOUS,
-                            detail=(
-                                f"Multiple GEPRIS projects match in h1: {', '.join(candidates)}"
-                            ),
-                        )
-                    )
-                    continue
-            gepris_id = candidates[0]
+            assert resolved is not None
+            gepris_id = resolved
 
         details, error = _fetch_gepris_project(session, gepris_id)
         if details is None:
@@ -304,6 +370,9 @@ EXAMPLES = FunderExamples(
         "SFB1423",
     ),
     matching_ids=(
+        # Sub-project references — programme code + subproject suffix encoded as "CODE#SUB".
+        "SFB 1449 B02",
+        "CRC 1193 C04",
         # Programme-code-only entries — resolved via GEPRIS keyword search (doSearchSimple).
         "SFB1114/A04",
         "SFB 1423",
@@ -355,11 +424,10 @@ EXAMPLES = FunderExamples(
             expected_extracted=("421152132", "491392403"),
             verified_existing=("421152132", "491392403"),
         ),
-        # Programme-code-only text — no GEPRIS ID in context, so codes are returned
-        # directly (whitespace collapsed: "RTG 2070" → "RTG2070").
+        # Sub-project with slash separator — encoded as "PROGRAMME#SUBPROJECT".
         ExtractionExample(
             text="Funded by DFG SFB1114/A04 and RTG 2070.",
-            expected_extracted=("SFB1114", "RTG2070"),
+            expected_extracted=("SFB1114#A04", "RTG2070"),
             verified_existing=(),
         ),
         # Hyphen between programme prefix and number + underscore-separated GEPRIS ID.
@@ -372,6 +440,12 @@ EXAMPLES = FunderExamples(
         ExtractionExample(
             text="FOR 5249_449872909",
             expected_extracted=("449872909",),
+            verified_existing=(),
+        ),
+        # Sub-project reference — encoded as "PROGRAMME#SUBPROJECT".
+        ExtractionExample(
+            text="Funded by DFG CRC 1193 C04.",
+            expected_extracted=("CRC1193#C04",),
             verified_existing=(),
         ),
     ),
