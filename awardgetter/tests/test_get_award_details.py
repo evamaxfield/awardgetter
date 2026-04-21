@@ -53,7 +53,7 @@ def _expand_not_found_awards() -> list:
 def test_get_award_details_finds_verified_award(
     funder_id: str, text: str, cache_dir: Path
 ) -> None:
-    time.sleep(1)  # Be nice to APIs and avoid hitting rate limits
+    time.sleep(0.25)  # Be nice to APIs and avoid hitting rate limits
     result = get_award_details(funder_id, text, cache_dir=cache_dir)
     assert len(result.found) >= 1, (
         f"Expected at least one award found for {funder_id!r} / {text!r}; "
@@ -66,7 +66,7 @@ def test_get_award_details_finds_verified_award(
 @flaky(max_runs=3, min_passes=1)
 @pytest.mark.parametrize(("funder_id", "text"), _expand_not_found_awards())
 def test_get_award_details_not_found_award(funder_id: str, text: str, cache_dir: Path) -> None:
-    time.sleep(1)  # Be nice to APIs and avoid hitting rate limits
+    time.sleep(0.25)  # Be nice to APIs and avoid hitting rate limits
     result = get_award_details(funder_id, text, cache_dir=cache_dir)
     assert len(result.found) == 0, (
         f"Expected no awards found for {funder_id!r} / {text!r}; got found={result.found}"

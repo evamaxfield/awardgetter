@@ -32,12 +32,17 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # CORDIS — callers with explicit DFG context should pass the funder
 # directly rather than infer from a bare numeric string.
 _DFG_RE = re.compile(
-    r"\b(?:SFB-?TRR|SFB|TRR|FOR|EXC|GRK|RTG|SPP|INST)\s*\d+\b",
+    r"\b(?:SFB-?TRR|SFB|TRR|FOR|EXC|GRK|RTG|SPP|INST)[-\s]*\d+(?!\d)",
     re.IGNORECASE,
 )
 
 # 7-9 digit GEPRIS numeric project IDs embedded alongside programme codes.
-_GEPRIS_EMBEDDED_RE = re.compile(r"\b(\d{7,9})\b")
+# Uses digit-only boundaries (not \b) so underscores don't block matching.
+_GEPRIS_EMBEDDED_RE = re.compile(r"(?<!\d)(\d{7,9})(?!\d)")
+
+# Bare 7-9 digit GEPRIS IDs (whole input) or "project ID XXXXXXXXX" form.
+_GEPRIS_BARE_RE = re.compile(r"^\s*\d{7,9}\s*$")
+_GEPRIS_ID_PREFIX_RE = re.compile(r"\bID\s+(\d{7,9})\b")
 
 # Matches a pure GEPRIS numeric ID (what extract_award_ids returns for embedded IDs).
 _GEPRIS_NUMERIC_RE = re.compile(r"^\d{7,9}$")
@@ -59,6 +64,18 @@ def extract_award_ids(text: str) -> list[str]:
     s = normalize_dashes(text)
     seen: set[str] = set()
     results: list[str] = []
+
+    # Fast-path: whole string is a bare 7-9 digit GEPRIS ID.
+    if _GEPRIS_BARE_RE.match(s):
+        return [s.strip()]
+
+    # "project ID XXXXXXXXX" or "ID XXXXXXXXX" pattern.
+    for gid in _GEPRIS_ID_PREFIX_RE.findall(s):
+        if gid not in seen:
+            seen.add(gid)
+            results.append(gid)
+    if results:
+        return results
 
     for prog_match in _DFG_RE.finditer(s):
         ctx_start = max(0, prog_match.start() - 60)
@@ -82,6 +99,14 @@ def extract_award_ids(text: str) -> list[str]:
             if prog_code not in seen:
                 seen.add(prog_code)
                 results.append(prog_code)
+
+    # Fallback: if no programme code found, extract any 7-9 digit number as a
+    # potential GEPRIS ID (converts PARSE_ERROR → NOT_FOUND for bare numeric inputs).
+    if not results:
+        for gid in _GEPRIS_EMBEDDED_RE.findall(s):
+            if gid not in seen:
+                seen.add(gid)
+                results.append(gid)
 
     return results
 
@@ -239,6 +264,8 @@ EXAMPLES = FunderExamples(
         "GRK2224",
         "SPP 2363",
         "INST 35/1134-1 FUGG",
+        # Hyphen between programme prefix and number (now accepted).
+        "EXC-2189",
     ),
     not_found_awards=(
         # Programme number 9999 does not exist in GEPRIS.
@@ -282,6 +309,18 @@ EXAMPLES = FunderExamples(
         ExtractionExample(
             text="Funded by DFG SFB1114/A04 and RTG 2070.",
             expected_extracted=("SFB1114", "RTG2070"),
+            verified_existing=(),
+        ),
+        # Hyphen between programme prefix and number + underscore-separated GEPRIS ID.
+        ExtractionExample(
+            text="CIBSS - EXC-2189 - project ID 390939984",
+            expected_extracted=("390939984",),
+            verified_existing=(),
+        ),
+        # GEPRIS ID embedded after underscore — word-boundary fix required.
+        ExtractionExample(
+            text="FOR 5249_449872909",
+            expected_extracted=("449872909",),
             verified_existing=(),
         ),
     ),

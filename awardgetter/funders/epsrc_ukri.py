@@ -106,15 +106,31 @@ def get_award_details(
             continue
 
         if resp.status_code == 404:
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.NOT_FOUND,
-                    detail="Grant reference not found in GtR",
+            # Retry with /1 suffix if the reference has no trailing serial number.
+            # Many truncated references (e.g. EP/F067496) are simply missing the /1.
+            if not re.search(r"/\d+$", award_id):
+                retried_id = award_id + "/1"
+                try:
+                    resp = requests.get(
+                        _GTR_API_URL.format(ref=retried_id),
+                        headers={"Accept": "application/json"},
+                        timeout=30,
+                    )
+                    if resp.ok:
+                        award_id = retried_id
+                    # If retry also fails, fall through to not-found handling below.
+                except requests.exceptions.RequestException:
+                    pass
+            if not resp.ok:
+                not_found.append(
+                    AwardNotFound(
+                        funder_id=FUNDER_ID,
+                        input_text=award_id,
+                        reason=NotFoundReason.NOT_FOUND,
+                        detail="Grant reference not found in GtR",
+                    )
                 )
-            )
-            continue
+                continue
 
         if resp.status_code == 429:
             not_found.append(
@@ -192,6 +208,9 @@ EXAMPLES = FunderExamples(
         "EP/P020259/1)",
         # Embedded in surrounding text.
         "MVSE EP/V002856/1",
+        # References missing the trailing /1 — retried automatically on 404.
+        "EP/F067496",
+        "EP/N007638",
     ),
     not_found_awards=(
         # Z-prefix references do not exist in the GtR database.

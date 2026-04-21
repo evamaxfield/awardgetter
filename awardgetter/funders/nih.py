@@ -90,7 +90,10 @@ _NIH_REPORTER_URL = "https://api.reporter.nih.gov/v2/projects/search"
 _NIH_BATCH_SIZE = 50
 
 _STRIP_APP_TYPE_RE = re.compile(r"^\d")
-_STRIP_SUPPORT_YEAR_RE = re.compile(r"-\d+.*$")
+_STRIP_SUPPORT_YEAR_RE = re.compile(r"-\d{1,2}[A-Z]*$")
+_FIX_ACTIVITY_O_RE = re.compile(r"^([A-Z])O(\d[A-Z]{2})")
+_ZERO_PAD_SERIAL_RE = re.compile(r"([A-Z]{2})(\d+)$")
+_NIH_BARE_SERIAL_RE = re.compile(r"\b[A-Z]{2}\d{5,6}\b")
 
 
 def _parse_nih_date(s: str | None):
@@ -166,13 +169,35 @@ def _base_project_num(num: str) -> str:
     return _STRIP_SUPPORT_YEAR_RE.sub("", s)
 
 
+def _normalize_activity_code(s: str) -> str:
+    """Replace O→0 typos in the activity-code digit position (e.g. RO1 → R01)."""
+    return _FIX_ACTIVITY_O_RE.sub(lambda m: m.group(1) + "0" + m.group(2), s)
+
+
+def _zero_pad_serial(s: str) -> str:
+    """Zero-pad the terminal serial number to 6 digits when it is shorter (e.g. R01GM60595 → R01GM060595)."""
+    m = _ZERO_PAD_SERIAL_RE.search(s)
+    if m and len(m.group(2)) < 6:
+        return s[: m.start()] + m.group(1) + m.group(2).zfill(6)
+    return s
+
+
 def check_award_id(text: str) -> bool:
     return bool(_NIH_CORE_PATTERN.search(_normalize(text)))
 
 
 def extract_award_ids(text: str) -> list[str]:
-    matches = _NIH_CORE_PATTERN.findall(_normalize(text))
-    return [re.sub(r"[-\s]+", "", _base_project_num(m)) for m in matches]
+    normalized = _normalize(text)
+    matches = _NIH_CORE_PATTERN.findall(normalized)
+    results = [
+        _zero_pad_serial(_normalize_activity_code(re.sub(r"[-\s]+", "", _base_project_num(m))))
+        for m in matches
+    ]
+    if not results:
+        # Fallback: bare institute+serial without activity code — will likely be NOT_FOUND
+        # but converts PARSE_ERROR → NOT_FOUND for better observability.
+        results = _NIH_BARE_SERIAL_RE.findall(normalized)
+    return results
 
 
 def get_award_details(
@@ -255,6 +280,12 @@ EXAMPLES = FunderExamples(
         "NIH U24NS124001",
         # Internal whitespace within the project number is tolerated.
         "U24 NS 124001",
+        # Separator-heavy format — support-year suffix stripped correctly.
+        "2-R01-DC-009209-11",
+        # Common O→0 typo in activity code.
+        "RO1-MH-075916",
+        # Short (5-digit) serial — zero-padded to 6.
+        "R01 GM60595",
     ),
     not_found_awards=(
         # Fake institute codes (ZZ, XX, YY) — format-valid but nonexistent in NIH RePORTER.

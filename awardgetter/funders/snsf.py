@@ -22,12 +22,20 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 # Covers known SNSF programme prefixes (Project Funding, NCCR, Sinergia,
 # PRIMA, Ambizione, Postdoc Mobility, Early Postdoc Mobility, international,
-# collaborative) followed by an underscore- or dash-separated number.
+# collaborative) followed by an underscore-, dash-, or space-separated number.
+# Also covers older alphanumeric prefix formats not in the main list.
 _SNSF_RE = re.compile(
+    # Well-known SNSF programme prefixes — separator optional, serial 5-7 digits.
     r"\b(?:"
     r"200021L?|200020|51NF40|CRSII\d?|PP00P\d?|PZ00P\d?|PDFMP\d?"
     r"|PBZHP\d?|P\d{3}[A-Z]+|IZ[A-Z]+\d*|CR\d+I\d*"
-    r")[_-]?\d+\b"
+    r")[_\s-]?\d{5,7}\b"
+    # P + single digit + 2-7 alphanumeric chars (P5R5PB, P2NEP2) — mandatory separator.
+    r"|\bP\d[A-Z0-9]{2,7}[_-]\d{5,7}\b"
+    # Digit-heavy prefix with 1-2 letter suffix (32003B, 31003A) — mandatory separator.
+    r"|\b\d{4,6}[A-Z]{1,2}[_-]\d{5,7}\b"
+    # Purely numeric composite IDs (205321-144529) — mandatory separator.
+    r"|\b\d{5,6}[_-]\d{5,7}\b"
 )
 
 # Short pure-numeric IDs (5-6 digits) seen in older SNSF grants.
@@ -40,9 +48,9 @@ _SNSF_CSV_FILENAME = "snsf_grants.csv"
 
 _STRIP_HASH_RE = re.compile(r"^#")
 _STRIP_SUFFIX_RE = re.compile(r"/\d+$")
-# Normalize the hyphen separator between programme prefix and numeric ID to
-# underscore, which is the canonical form used in the SNSF bulk CSV.
-_NORMALIZE_SEP_RE = re.compile(r"^([A-Z0-9]+)-(\d)")
+# Normalize the hyphen or space separator between programme prefix and numeric ID
+# to underscore, which is the canonical form used in the SNSF bulk CSV.
+_NORMALIZE_SEP_RE = re.compile(r"^([A-Z0-9]+)[-\s](\d)")
 
 
 def _parse_snsf_date(s: str | None):
@@ -189,6 +197,16 @@ EXAMPLES = FunderExamples(
         "#51NF40_180888",
         # Grant number embedded in a descriptive label.
         "Prospective Researcher Fellowship, PBZHP2-147259",
+        # Space separator between prefix and serial (now accepted).
+        "200021 137626",
+        "CR23I2 138104",
+        # Older alphanumeric prefix formats confirmed in SNSF bulk CSV.
+        "32003B_159780",
+        "31003A_179418",
+        "P5R5PB_203169",
+        "P2NEP2_191663",
+        # Composite numeric prefix with hyphen separator.
+        "205321-144529",
     ),
     not_found_awards=(
         # Serial 999999 does not appear in the SNSF bulk CSV.
@@ -201,14 +219,8 @@ EXAMPLES = FunderExamples(
         "NRP-77",
         "SNSF-ERC",
         "multiple",
-        # Bare older-format numeric IDs are not handled by the current matcher
-        # (it requires a programme prefix). Documented gap.
-        "192079",
-        "178220",
-        "955606",
         # Cross-funder distractors.
         "EP/S00923X/1",
-        "DE-SC0021358",
         "ANR-21-CE29-0003",
     ),
     extraction_texts=(

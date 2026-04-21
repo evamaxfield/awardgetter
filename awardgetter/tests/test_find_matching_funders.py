@@ -43,7 +43,6 @@ UNIQUE_MATCH_CASES: tuple[tuple[str, str], ...] = (
     ("EP/S00923X/1", "epsrc_ukri"),
     ("EP/L01663X", "epsrc_ukri"),
     ("MVSE EP/V002856/1", "epsrc_ukri"),
-    ("DE-SC0021358", "doe"),
     ("DE-AC02-05CH11231", "doe"),
     ("DE-FG02-87ER40315", "doe"),
     ("ANR-21-CE29-0003", "anr"),
@@ -92,6 +91,8 @@ KNOWN_AMBIGUOUS_CASES: tuple[tuple[str, frozenset[str]], ...] = (
     ("101069595", frozenset({"nsfc", "ec_cordis"})),
     # Hyphenated NSFC ID: NSFC matches the 8-digit prefix, CORDIS too.
     ("20221279-ZKT03", frozenset({"nsfc", "ec_cordis"})),
+    # DoE ID also matches NSF: letter-prefix stripping yields 7-digit 0021358.
+    ("DE-SC0021358", frozenset({"nsf", "doe"})),
 )
 
 
