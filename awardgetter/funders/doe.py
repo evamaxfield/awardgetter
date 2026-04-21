@@ -23,7 +23,10 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # "DE" (DEAC05-00OR22725) as seen in real acknowledgements. The optional
 # group allows an extra hyphen before the site code (DE-AC02-05-CH11231)
 # and 2-3 letter site codes (DE-AC06-76RLO1830).
-_DOE_RE = re.compile(r"\bDE-?[A-Z]{2}\d+(?:-\d{2,3}-?[A-Z]{2,3}\d+)?\b")
+_DOE_RE = re.compile(r"\bDE-?[A-Z]{2}\d+(?:-\d{2,3}-?[A-Z]{2,3}\d+)?\b", re.IGNORECASE)
+
+# Normalise "DOE-..." → "DE-..." before matching (DOE is not the contract prefix).
+_DOE_PREFIX_RE = re.compile(r"\bDOE-", re.IGNORECASE)
 
 # Strips "No." / "No. " prefix sometimes written before DOE award numbers.
 _NO_PREFIX_RE = re.compile(r"^\s*[Nn]o\.?\s+")
@@ -53,7 +56,9 @@ def _osti_confirms_pre2007(award_id: str) -> bool:
             params={"q": osti_key, "rows": 1},
             timeout=10,
         )
-        return bool(resp.ok and (resp.json().get("records") or []))
+        data = resp.json()
+        records = data if isinstance(data, list) else (data.get("records") or [])
+        return bool(resp.ok and records)
     except requests.exceptions.RequestException:
         return False
 
@@ -67,21 +72,25 @@ def _parse_doe_date(s: str | None):
         return None
 
 
-def check_award_id(text: str) -> bool:
+def _normalize_doe(text: str) -> str:
     s = normalize_dashes(text)
     s = _NO_PREFIX_RE.sub("", s)
-    return bool(_DOE_RE.search(s))
+    s = _DOE_PREFIX_RE.sub("DE-", s)
+    return s
+
+
+def check_award_id(text: str) -> bool:
+    return bool(_DOE_RE.search(_normalize_doe(text)))
 
 
 def extract_award_ids(text: str) -> list[str]:
-    s = normalize_dashes(text)
-    s = _NO_PREFIX_RE.sub("", s)
+    s = _normalize_doe(text)
     seen: set[str] = set()
     results: list[str] = []
     for m in _DOE_RE.finditer(s):
-        val = m.group(0).rstrip(".")
+        val = m.group(0).upper().rstrip(".")
         # Normalize missing hyphen: DEAC... -> DE-AC...
-        if val.upper().startswith("DE") and len(val) > 2 and val[2] != "-":
+        if val.startswith("DE") and len(val) > 2 and val[2] != "-":
             val = "DE-" + val[2:]
         if val not in seen:
             seen.add(val)
@@ -218,6 +227,9 @@ EXAMPLES = FunderExamples(
         "DE-OE0000895",
         # Pre-2007 grant
         "DE-FG02-87ER40315",
+        # Lowercase input — normalised to uppercase before lookup;
+        # grant confirmed in USASpending.
+        "de-sc0011090",
     ),
     matching_ids=(
         "DE-SC0010558",
@@ -237,6 +249,8 @@ EXAMPLES = FunderExamples(
         "DE-AC06-76RLO1830",
         # "No." prefix stripped before matching.
         "No. DE-AC02-05-CH11231",
+        # DOE- prefix normalised to DE-.
+        "DOE-AC02-05CH11231",
     ),
     rejected_ids=(
         # BER programme tracking codes — not award numbers.

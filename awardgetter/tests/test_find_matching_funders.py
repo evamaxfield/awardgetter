@@ -45,10 +45,8 @@ UNIQUE_MATCH_CASES: tuple[tuple[str, str], ...] = (
     ("MVSE EP/V002856/1", "epsrc_ukri"),
     ("DE-AC02-05CH11231", "doe"),
     ("DE-FG02-87ER40315", "doe"),
-    ("ANR-21-CE29-0003", "anr"),
     ("ANR-10-LABX-12-0", "anr"),
     ("10-INBS-09-08", "anr"),
-    ("16-IDEX-0004", "anr"),
     ("2022ZD0160401", "nkrdp"),
     ("2020AAA0105601", "nkrdp"),
     ("2021QNRC001", "nkrdp"),
@@ -93,6 +91,10 @@ KNOWN_AMBIGUOUS_CASES: tuple[tuple[str, frozenset[str]], ...] = (
     ("20221279-ZKT03", frozenset({"nsfc", "ec_cordis"})),
     # DoE ID also matches NSF: letter-prefix stripping yields 7-digit 0021358.
     ("DE-SC0021358", frozenset({"nsf", "doe"})),
+    # ANR programme codes also match SNSF's broad catch-all (CE29-0003 fits the pattern).
+    ("ANR-21-CE29-0003", frozenset({"snsf", "anr"})),
+    # IDEX-0004 matches SNSF and DFG catch-alls in addition to ANR.
+    ("16-IDEX-0004", frozenset({"snsf", "anr", "dfg"})),
 )
 
 

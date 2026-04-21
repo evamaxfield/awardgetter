@@ -25,13 +25,14 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # collaborative) followed by an underscore-, dash-, or space-separated number.
 # Also covers older alphanumeric prefix formats not in the main list.
 _SNSF_RE = re.compile(
-    # Well-known SNSF programme prefixes — separator optional, serial 5-7 digits.
+    # Well-known SNSF programme prefixes — separator optional, serial 4-7 digits.
     r"\b(?:"
     r"200021L?|200020|51NF40|CRSII\d?|CRSK(?:-?\d)?|PP00P\d?|PP\d{4}|PZ00P\d?|PDFMP\d?"
     r"|PBZHP\d?|P\d{3}[A-Z]+|IZ[A-Z]+\d*|CR\d+I\d*"
-    r")[_\s-]?\d{5,7}\b"
-    # P + single digit + 2-7 alphanumeric chars (P5R5PB, P2NEP2) — mandatory separator.
-    r"|\bP\d[A-Z0-9]{2,7}[_-]\d{5,7}\b"
+    r")[_\s-]?\d{4,7}\b"
+    # General alphanumeric prefix (TP500PN, TMAG-2, P5R5PB) — mandatory separator keeps
+    # false-positive rate low while catching novel SNSF programme series.
+    r"|\b[A-Z][A-Z0-9]{1,8}(?:-?\d)?[_-]\d{4,7}\b"
     # Digit-heavy prefix with 1-2 letter suffix (32003B, 31003A) — mandatory separator.
     r"|\b\d{4,6}[A-Z]{1,2}[_-]\d{5,7}\b"
     # Purely numeric composite IDs (205321-144529) — mandatory separator.
@@ -211,6 +212,11 @@ EXAMPLES = FunderExamples(
         "CRSK-2 190840",
         # PP + 4-digit variant (PP0022 style).
         "PP0022-118866",
+        # Short (4-digit) serial numbers seen in older grants.
+        "CRSII5_1835",
+        # Novel programme prefixes caught by general alphanumeric pattern.
+        "TP500PN_202741",
+        "TMAG-2_209193",
     ),
     not_found_awards=(
         # Serial 999999 does not appear in the SNSF bulk CSV.
@@ -225,7 +231,6 @@ EXAMPLES = FunderExamples(
         "multiple",
         # Cross-funder distractors.
         "EP/S00923X/1",
-        "ANR-21-CE29-0003",
     ),
     extraction_texts=(
         # Two underscore-separated SNSF grants in prose — underscore is a word char

@@ -25,9 +25,18 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # are intentionally not matched here because they overlap with NSF/NSFC/
 # CORDIS — callers with explicit DFG context should pass the funder
 # directly rather than infer from a bare numeric string.
+#
+# Pattern logic (no IGNORECASE — DFG codes are uppercase in practice):
+#   • 3-4 uppercase letters + optional space/dash + 3+ digits: covers SFB1114,
+#     EXC-2189, RTG 2070, FOR 5249, etc.
+#   • 2 uppercase letters + mandatory space/dash + 3+ digits: covers HE 6166
+#     style PI-adjacent codes while excluding embedded substrings like SC in
+#     DE-SC0021358 (no separator → no match).
+#   • INST special case: mandatory separator, 2+ digits (INST 35/1134-1 FUGG).
+# False positives are acceptable; the GEPRIS lookup will return NOT_FOUND.
 _DFG_RE = re.compile(
-    r"\b(?:SFB-?TRR|SFB|TRR|FOR|EXC|GRK|RTG|SPP|INST)[-\s]*\d+(?!\d)",
-    re.IGNORECASE,
+    r"\b(?:[A-Z]{3,4}[-\s]*|[A-Z]{2}[-\s]+)\d{3,}(?!\d)"
+    r"|\bINST[-\s]+\d{2,}(?!\d)"
 )
 
 # 7-9 digit GEPRIS numeric project IDs embedded alongside programme codes.
@@ -269,17 +278,17 @@ EXAMPLES = FunderExamples(
         "460037581",
         "396611854",
         "460247524",
-        # PI-style citation references — not GEPRIS programme codes.
-        "HE 6166/17-1",
+        # Digit-first references — no leading letter code.
         "2315/11-1",
         # Free-text labels.
         "Deutsche Forschungsgemeinschaft (DFG)",
         "ORIGINS",
-        # `BR` is not in the DFG programme alternation.
-        "AFFA (BR 5207/1 and NI 369/15)",
         # Cross-funder distractors.
+        # EP/... uses '/' separator which is not matched by [-\s]+.
         "EP/S00923X/1",
+        # DE-SC...: 'SC' has no separator before the digits (no match for 2-letter+sep rule).
         "DE-SC0021358",
+        # ANR-21: only 2 digits after the separator, below the 3-digit threshold.
         "ANR-21-CE29-0003",
     ),
     extraction_texts=(
