@@ -36,7 +36,8 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # False positives are acceptable; the GEPRIS lookup will return NOT_FOUND.
 _DFG_RE = re.compile(
     r"\b(?:[A-Z]{3,4}[-\s]*|[A-Z]{2}[-\s]+)\d{3,}(?!\d)"
-    r"|\bINST[-\s]+\d{2,}(?!\d)"
+    r"|\bINST[-\s]+\d{2,}(?!\d)",
+    re.IGNORECASE,
 )
 
 # 7-9 digit GEPRIS numeric project IDs embedded alongside programme codes.
@@ -263,6 +264,8 @@ EXAMPLES = FunderExamples(
         "INST 35/1134-1 FUGG",
         # Hyphen between programme prefix and number (now accepted).
         "EXC-2189",
+        # Mixed-case input — IGNORECASE handles it.
+        "Sfb 951",
     ),
     not_found_awards=(
         # Programme number 9999 does not exist in GEPRIS.

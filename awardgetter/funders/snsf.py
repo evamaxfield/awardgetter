@@ -30,9 +30,11 @@ _SNSF_RE = re.compile(
     r"200021L?|200020|51NF40|CRSII\d?|CRSK(?:-?\d)?|PP00P\d?|PP\d{4}|PZ00P\d?|PDFMP\d?"
     r"|PBZHP\d?|P\d{3}[A-Z]+|IZ[A-Z]+\d*|CR\d+I\d*"
     r")[_\s-]?\d{4,7}\b"
-    # General alphanumeric prefix (TP500PN, TMAG-2, P5R5PB) — mandatory separator keeps
-    # false-positive rate low while catching novel SNSF programme series.
-    r"|\b[A-Z][A-Z0-9]{1,8}(?:-?\d)?[_-]\d{4,7}\b"
+    # General alphanumeric prefix (TP500PN, TMAG-2, P5R5PB, P2ELP2) — mandatory separator
+    # keeps false-positive rate low while catching novel SNSF programme series.
+    # Underscore/hyphen: 4-7 digit serial. Space: 5-7 digits (prevents matching
+    # 3-4 digit DFG programme codes like "EXC 2067").
+    r"|\b[A-Z][A-Z0-9]{1,8}(?:-?\d)?(?:[_-]\d{4,7}| \d{5,7})\b"
     # Digit-heavy prefix with 1-2 letter suffix (32003B, 31003A) — mandatory separator.
     r"|\b\d{4,6}[A-Z]{1,2}[_-]\d{5,7}\b"
     # Purely numeric composite IDs (205321-144529) — mandatory separator.
@@ -217,6 +219,8 @@ EXAMPLES = FunderExamples(
         # Novel programme prefixes caught by general alphanumeric pattern.
         "TP500PN_202741",
         "TMAG-2_209193",
+        # Space separator between prefix and serial (now accepted by catch-all).
+        "P2ELP2 187955",
     ),
     not_found_awards=(
         # Serial 999999 does not appear in the SNSF bulk CSV.

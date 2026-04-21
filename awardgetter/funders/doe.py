@@ -23,7 +23,7 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # "DE" (DEAC05-00OR22725) as seen in real acknowledgements. The optional
 # group allows an extra hyphen before the site code (DE-AC02-05-CH11231)
 # and 2-3 letter site codes (DE-AC06-76RLO1830).
-_DOE_RE = re.compile(r"\bDE-?[A-Z]{2}\d+(?:-\d{2,3}-?[A-Z]{2,3}\d+)?\b", re.IGNORECASE)
+_DOE_RE = re.compile(r"\bDE-?[A-Z]{2}-?\d+(?:-\d{2,3}-?[A-Z]{2,3}\d+)?\b", re.IGNORECASE)
 
 # Normalise "DOE-..." → "DE-..." before matching (DOE is not the contract prefix).
 _DOE_PREFIX_RE = re.compile(r"\bDOE-", re.IGNORECASE)
@@ -230,6 +230,9 @@ EXAMPLES = FunderExamples(
         # Lowercase input — normalised to uppercase before lookup;
         # grant confirmed in USASpending.
         "de-sc0011090",
+        # Extra hyphen
+        "DE-AR-0001282",
+        "DE-SC-0022260",
     ),
     matching_ids=(
         "DE-SC0010558",
