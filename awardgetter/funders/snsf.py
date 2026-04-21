@@ -35,8 +35,9 @@ _SNSF_RE = re.compile(
     # Underscore/hyphen: 4-7 digit serial. Space: 5-7 digits (prevents matching
     # 3-4 digit DFG programme codes like "EXC 2067").
     r"|\b[A-Z][A-Z0-9]{1,8}(?:-?\d)?(?:[_-]\d{4,7}| \d{5,7})\b"
-    # Digit-heavy prefix with 1-2 letter suffix (32003B, 31003A) — mandatory separator.
-    r"|\b\d{4,6}[A-Z]{1,2}[_-]\d{5,7}\b"
+    # Digit-heavy prefix with 1-2 letter suffix (32003B, 31003A, 3100A) — mandatory
+    # separator; space allowed since these patterns are digit-first and unambiguous.
+    r"|\b\d{4,6}[A-Z]{1,2}[_\s-]\d{5,7}\b"
     # Purely numeric composite IDs (205321-144529) — mandatory separator.
     r"|\b\d{5,6}[_-]\d{5,7}\b"
 )
@@ -221,6 +222,8 @@ EXAMPLES = FunderExamples(
         "TMAG-2_209193",
         # Space separator between prefix and serial (now accepted by catch-all).
         "P2ELP2 187955",
+        # Digit-heavy prefix with space separator.
+        "3100A 132951/1",
     ),
     not_found_awards=(
         # Serial 999999 does not appear in the SNSF bulk CSV.

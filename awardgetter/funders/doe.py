@@ -28,8 +28,12 @@ _DOE_RE = re.compile(r"\bDE-?[A-Z]{2}-?\d+(?:-\d{2,3}-?[A-Z]{2,3}\d+)?\b", re.IG
 # Normalise "DOE-..." → "DE-..." before matching (DOE is not the contract prefix).
 _DOE_PREFIX_RE = re.compile(r"\bDOE-", re.IGNORECASE)
 
-# Strips "No." / "No. " prefix sometimes written before DOE award numbers.
-_NO_PREFIX_RE = re.compile(r"^\s*[Nn]o\.?\s+")
+# Strips leading "Contract [No.] " or "No. " before an award number.
+_NO_PREFIX_RE = re.compile(r"^\s*(?:[Cc]ontract\s+)?[Nn]o\.?\s+")
+_CONTRACT_PREFIX_RE = re.compile(r"^\s*[Cc]ontract\s+")
+
+# Bare SC\d+ IDs missing the "DE-" prefix (e.g. SC0010008 → DE-SC0010008).
+_DOE_SC_BARE_RE = re.compile(r"(?<![A-Z\-])SC(\d{7,10})\b", re.IGNORECASE)
 
 # Management & Operating contracts: DE-AC{NN}-{YY}{XX}{NNNNN}
 # These are lab-wide umbrella contracts, not individual research grants.
@@ -74,13 +78,15 @@ def _parse_doe_date(s: str | None):
 
 def _normalize_doe(text: str) -> str:
     s = normalize_dashes(text)
+    s = _CONTRACT_PREFIX_RE.sub("", s)
     s = _NO_PREFIX_RE.sub("", s)
     s = _DOE_PREFIX_RE.sub("DE-", s)
     return s
 
 
 def check_award_id(text: str) -> bool:
-    return bool(_DOE_RE.search(_normalize_doe(text)))
+    s = _normalize_doe(text)
+    return bool(_DOE_RE.search(s) or _DOE_SC_BARE_RE.search(s))
 
 
 def extract_award_ids(text: str) -> list[str]:
@@ -92,6 +98,12 @@ def extract_award_ids(text: str) -> list[str]:
         # Normalize missing hyphen: DEAC... -> DE-AC...
         if val.startswith("DE") and len(val) > 2 and val[2] != "-":
             val = "DE-" + val[2:]
+        if val not in seen:
+            seen.add(val)
+            results.append(val)
+    # Bare SC\d+ with missing DE- prefix (e.g. "SC0010008" → "DE-SC0010008").
+    for m in _DOE_SC_BARE_RE.finditer(s):
+        val = "DE-SC" + m.group(1).upper()
         if val not in seen:
             seen.add(val)
             results.append(val)
@@ -239,8 +251,16 @@ EXAMPLES = FunderExamples(
         "DE-SC0021303",
         "DE-SC0025642",
         "DE-SC0020441",
+        # Bare SC\d+ missing the DE- prefix — normalised to DE-SC... before lookup.
+        "SC0021358",
+        "SC0022917",
+        # "Contract [No.]" prefix stripped before matching.
+        "Contract DE-SC0021358",
+        "Contract No. DE-SC0021358",
     ),
     not_found_awards=(
+        # Bare SC ID that normalises but grant does not exist in USASpending.
+        "SC0000001",
         # M&O umbrella contracts: format-valid but intentionally not individual grants.
         "DE-AC02-05CH11231",
         "DE-AC05-00OR22725",
@@ -261,8 +281,6 @@ EXAMPLES = FunderExamples(
         # Numeric-only / label-only inputs.
         "62201",
         "COVID-19",
-        # No-prefix form — current matcher requires a literal "DE".
-        "SC0022917",
         # Missing "DE" prefix — matcher does not synthesise it.
         "-AC36-08GO28308",
         # Cross-funder distractors.

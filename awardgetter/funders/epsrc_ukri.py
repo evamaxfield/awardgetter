@@ -38,9 +38,16 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
 _UKRI_RE = re.compile(r"\b[A-Z]{2}/[A-Z0-9]{6,9}(?:/\d+)?\b")
 _UKRI_NUMERIC_RE = re.compile(r"\b\d{7}\b")
+# Catches grant refs where the '/' separator was omitted (e.g. EPN036106/1 → EP/N036106/1).
+_UKRI_MISSING_SLASH_RE = re.compile(r"\b([A-Z]{2})([A-Z][A-Z0-9]{5,8}/\d+)\b")
 
 _GTR_API_URL = "https://gtr.ukri.org/api/projects?ref={ref}"
 _GTR_RATE_LIMIT_SLEEP = 1.0
+
+
+def _normalize_epsrc(text: str) -> str:
+    s = normalize_dashes(text)
+    return _UKRI_MISSING_SLASH_RE.sub(r"\1/\2", s)
 
 
 def _parse_gtr_date(value: str | int | None) -> date | None:
@@ -67,12 +74,12 @@ def _parse_gtr_date(value: str | int | None) -> date | None:
 
 
 def check_award_id(text: str) -> bool:
-    s = normalize_dashes(text)
+    s = _normalize_epsrc(text)
     return bool(_UKRI_RE.search(s) or _UKRI_NUMERIC_RE.search(s))
 
 
 def extract_award_ids(text: str) -> list[str]:
-    s = normalize_dashes(text)
+    s = _normalize_epsrc(text)
     return _UKRI_RE.findall(s) + _UKRI_NUMERIC_RE.findall(s)
 
 
@@ -212,6 +219,8 @@ EXAMPLES = FunderExamples(
         # References missing the trailing /1 — retried automatically on 404.
         "EP/F067496",
         "EP/N007638",
+        # Missing '/' separator between council prefix and grant body — normalised.
+        "EPN036106/1",
     ),
     not_found_awards=(
         # Z-prefix references do not exist in the GtR database.

@@ -185,6 +185,42 @@ def _search_gepris_for_programme(session: requests.Session, programme_code: str)
     return seen
 
 
+def _filter_candidates_by_programme_code(
+    session: requests.Session,
+    programme_code: str,
+    candidates: list[str],
+) -> list[str]:
+    """Return candidates whose GEPRIS page has the programme code in the div.details h1.
+
+    Only the umbrella project page carries the programme ID (e.g. 'SFB 1454') in the
+    main h1 inside div.details. Sub-project pages show the sub-project title there
+    instead and do not name the parent programme code in that element.
+    """
+    letter_m = re.match(r"([A-Za-z]+)", programme_code)
+    number_m = re.search(r"(\d+)", programme_code)
+    if not letter_m or not number_m:
+        return candidates
+    letters = re.escape(letter_m.group(1))
+    number = re.escape(number_m.group(1))
+    pattern = re.compile(rf"\b{letters}[\s\-]?{number}\b", re.IGNORECASE)
+
+    matched = []
+    for gepris_id in candidates:
+        time.sleep(random.uniform(0.3, 0.6))
+        url = f"{_GEPRIS_BASE_URL}/{gepris_id}?language=en"
+        try:
+            resp = session.get(url, timeout=15)
+        except requests.exceptions.RequestException:
+            continue
+        if not resp.ok:
+            continue
+        soup = BeautifulSoup(resp.text, "html.parser")
+        h1 = soup.select_one("div.details h1")
+        if h1 and pattern.search(h1.get_text(" ", strip=True)):
+            matched.append(gepris_id)
+    return matched
+
+
 def get_award_details(
     award_ids: list[str],
     cache_dir: Path,
@@ -212,16 +248,29 @@ def get_award_details(
                 )
                 continue
             if len(candidates) > 1:
-                # TODO: decide how to handle multiple GEPRIS results for a programme code
-                not_found.append(
-                    AwardNotFound(
-                        funder_id=FUNDER_ID,
-                        input_text=award_id,
-                        reason=NotFoundReason.AMBIGUOUS,
-                        detail=f"Multiple GEPRIS projects match: {', '.join(candidates)}",
+                candidates = _filter_candidates_by_programme_code(session, award_id, candidates)
+                if not candidates:
+                    not_found.append(
+                        AwardNotFound(
+                            funder_id=FUNDER_ID,
+                            input_text=award_id,
+                            reason=NotFoundReason.NOT_FOUND,
+                            detail="No GEPRIS project has this programme code in its title",
+                        )
                     )
-                )
-                continue
+                    continue
+                if len(candidates) > 1:
+                    not_found.append(
+                        AwardNotFound(
+                            funder_id=FUNDER_ID,
+                            input_text=award_id,
+                            reason=NotFoundReason.AMBIGUOUS,
+                            detail=(
+                                f"Multiple GEPRIS projects match in h1: {', '.join(candidates)}"
+                            ),
+                        )
+                    )
+                    continue
             gepris_id = candidates[0]
 
         details, error = _fetch_gepris_project(session, gepris_id)
@@ -251,6 +300,8 @@ EXAMPLES = FunderExamples(
         # Strings with embedded GEPRIS numeric project IDs — resolvable via direct page fetch.
         "SFB1423 / 421152132 - A07",
         "SFB-TRR 358/1 2023-491392403",
+        # Overall programme
+        "SFB1423",
     ),
     matching_ids=(
         # Programme-code-only entries — resolved via GEPRIS keyword search (doSearchSimple).
