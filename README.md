@@ -170,3 +170,7 @@ just test.                          # integration tests (real API calls)
 ## License
 
 MPL 2.0
+
+## AI Usage Statement
+
+While library structure and design decisions (e.g., mirroring the structure of image reading libraries), were deliberate design choices, much of the functionality of this library was developed using Claude Code. Retrieved award results were evaluated both by humans and AI.
