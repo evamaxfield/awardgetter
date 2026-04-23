@@ -256,7 +256,7 @@ def extract_award_ids(text: str) -> list[str]:
 
 
 def _aggregate_rows(award_id: str, rows: list[dict]) -> AwardDetails:
-    amounts = [r["award_amount"] for r in rows if r.get("award_amount")]
+    amounts = [r["award_amount"] for r in rows if r.get("award_amount") is not None]
     starts = [
         _parse_nih_date(r.get("project_start_date"))
         for r in rows

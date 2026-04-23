@@ -83,7 +83,13 @@ def check_award_id(text: str) -> bool:
 
 def extract_award_ids(text: str) -> list[str]:
     s = _normalize_epsrc(text)
-    return _UKRI_RE.findall(s) + _UKRI_NUMERIC_RE.findall(s)
+    seen: set[str] = set()
+    result: list[str] = []
+    for val in _UKRI_RE.findall(s) + _UKRI_NUMERIC_RE.findall(s):
+        if val not in seen:
+            seen.add(val)
+            result.append(val)
+    return result
 
 
 def _request_with_404_retry(award_id: str) -> tuple[requests.Response, str]:

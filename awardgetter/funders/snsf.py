@@ -122,8 +122,28 @@ def check_award_id(text: str) -> bool:
 
 def extract_award_ids(text: str) -> list[str]:
     s = _normalize_snsf(text)
-    matches = _SNSF_RE.findall(s) + _SNSF_NUMERIC_RE.findall(s)
-    return [_clean_grant_number(m) for m in matches]
+    seen: set[str] = set()
+    result: list[str] = []
+    # Composite programme-prefixed IDs: extract just the numeric serial suffix
+    # (e.g. "PZ00P3_180085" → "180085", "200021-166275" → "166275").
+    # Track consumed character ranges so _SNSF_NUMERIC_RE doesn't re-extract
+    # the constituent parts of composite IDs (e.g. "205321" from "205321-144529").
+    consumed: set[int] = set()
+    for m in _SNSF_RE.finditer(s):
+        serial = _extract_serial(_clean_grant_number(m.group()))
+        if serial and serial not in seen:
+            seen.add(serial)
+            result.append(serial)
+        consumed.update(range(m.start(), m.end()))
+    # Bare 5-6 digit serials not already covered by a composite match.
+    for m in _SNSF_NUMERIC_RE.finditer(s):
+        if m.start() in consumed:
+            continue
+        val = m.group()
+        if val not in seen:
+            seen.add(val)
+            result.append(val)
+    return result
 
 
 def get_award_details(
@@ -289,23 +309,22 @@ EXAMPLES = FunderExamples(
         "EP/S00923X/1",
     ),
     extraction_texts=(
-        # Two underscore-separated SNSF grants in prose — underscore is a word char
-        # so the numeric suffix has no leading \b and _SNSF_NUMERIC_RE won't over-extract.
+        # Composite programme-prefixed IDs: only the numeric serial is returned.
         ExtractionExample(
             text="This research was supported by SNSF grants PZ00P3_180085 and PP00P2_138979.",
-            expected_extracted=("PZ00P3_180085", "PP00P2_138979"),
-            verified_existing=("PZ00P3_180085", "PP00P2_138979"),
+            expected_extracted=("180085", "138979"),
+            verified_existing=("180085", "138979"),
         ),
         ExtractionExample(
             text="Funding from SNSF 200021_166275 and 200021_213074 enabled this study.",
-            expected_extracted=("200021_166275", "200021_213074"),
-            verified_existing=("200021_166275", "200021_213074"),
+            expected_extracted=("166275", "213074"),
+            verified_existing=("166275", "213074"),
         ),
         # SNSF keyword is stripped before matching, so grant IDs are still extracted.
         ExtractionExample(
             text="SNSF grant 200021_166275 supported this work.",
-            expected_extracted=("200021_166275",),
-            verified_existing=("200021_166275",),
+            expected_extracted=("166275",),
+            verified_existing=("166275",),
         ),
     ),
 )

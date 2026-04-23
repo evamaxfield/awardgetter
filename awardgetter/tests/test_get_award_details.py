@@ -62,6 +62,11 @@ def test_get_award_details_finds_verified_award(
     assert all(a.funder_id == funder_id for a in result.found)
 
 
+def test_get_award_details_unknown_funder_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown funder"):
+        get_award_details("unknown_funder_xyz", "12345")
+
+
 @pytest.mark.network
 @flaky(max_runs=3, min_passes=1)
 @pytest.mark.parametrize(("funder_id", "text"), _expand_not_found_awards())

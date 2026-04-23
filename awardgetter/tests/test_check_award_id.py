@@ -74,15 +74,22 @@ def test_all_funders_satisfy_protocol() -> None:
 
 @pytest.mark.parametrize(("funder_id", "text"), _expand_accepts())
 def test_check_award_id_accepts(funder_id: str, text: str) -> None:
-    assert FUNDER_MODULES[funder_id].check_award_id(text) is True
+    assert FUNDER_MODULES[funder_id].check_award_id(text) is True, (
+        f"{funder_id}: expected check_award_id({text!r}) to return True"
+    )
 
 
 @pytest.mark.parametrize(("funder_id", "text"), _expand_rejects())
 def test_check_award_id_rejects(funder_id: str, text: str) -> None:
-    assert FUNDER_MODULES[funder_id].check_award_id(text) is False
+    assert FUNDER_MODULES[funder_id].check_award_id(text) is False, (
+        f"{funder_id}: expected check_award_id({text!r}) to return False"
+    )
 
 
 @pytest.mark.parametrize(("funder_id", "ex"), _expand_extraction())
 def test_extract_award_ids(funder_id: str, ex: ExtractionExample) -> None:
     result = FUNDER_MODULES[funder_id].extract_award_ids(ex.text)
-    assert result == list(ex.expected_extracted)
+    assert result == list(ex.expected_extracted), (
+        f"{funder_id}: extract_award_ids({ex.text!r}) returned {result!r}, "
+        f"expected {list(ex.expected_extracted)!r}"
+    )

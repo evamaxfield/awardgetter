@@ -16,7 +16,7 @@ from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "dfg"
 FUNDER_DISPLAY_NAME: str = "Deutsche Forschungsgemeinschaft"
-FUNDER_ALTERNATE_IDS: tuple[str, ...] = ("dfg",)
+FUNDER_ALTERNATE_IDS: tuple[str, ...] = ()
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("German Research Foundation",)
 FUNDER_OPENALEX_ID: str = "F4320320879"
 FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
@@ -26,7 +26,7 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # CORDIS — callers with explicit DFG context should pass the funder
 # directly rather than infer from a bare numeric string.
 #
-# Pattern logic (no IGNORECASE — DFG codes are uppercase in practice):
+# Pattern logic (IGNORECASE accepted — DFG codes are uppercase but input may not be):
 #   • 3-4 uppercase letters + optional space/dash + 3+ digits: covers SFB1114,
 #     EXC-2189, RTG 2070, FOR 5249, etc.
 #   • 2 uppercase letters + mandatory space/dash + 3+ digits: covers HE 6166
