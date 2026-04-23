@@ -1,6 +1,5 @@
 """Funder matcher for JSPS KAKENHI grants."""
 
-import os
 import random
 import re
 import time
@@ -8,7 +7,7 @@ from datetime import date
 from pathlib import Path
 
 import requests
-from dotenv import load_dotenv
+from bs4 import BeautifulSoup
 
 from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._spec import ExtractionExample, FunderExamples
@@ -29,9 +28,8 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # like "JP26282221, JP26120733, JP18H04037, and JP20H05955".
 _KAKENHI_RE = re.compile(r"\b(?:JP)?\d{2}[HKJLN]\d{5}\b")
 
-_KAKEN_API_URL = "https://kaken.nii.ac.jp/opensearch/"
-_KAKEN_APP_ID_ENV = "KAKEN_APP_ID"
-# KAKEN API docs warn against high-volume access; 1.5s + jitter is conservative.
+_KAKEN_GRANT_URL = "https://kaken.nii.ac.jp/grant/KAKENHI-PROJECT-{id}/"
+# KAKEN website requests; 1.5s + jitter is conservative.
 _KAKEN_RATE_LIMIT_SLEEP = 1.5
 
 
@@ -47,37 +45,43 @@ def extract_award_ids(text: str) -> list[str]:
     return [r[2:] if r.startswith("JP") else r for r in raw]
 
 
-def _get_app_id() -> str:
-    # Load env
-    load_dotenv()
+def _parse_grant_page(html: str, award_id: str) -> AwardDetails:
+    soup = BeautifulSoup(html, "html.parser")
+    amount: float | None = None
+    start_date: date | None = None
+    end_date: date | None = None
 
-    app_id = os.environ.get(_KAKEN_APP_ID_ENV, "")
-    if not app_id:
-        raise ValueError(
-            f"KAKEN API requires a free Application ID. "
-            f"Register at https://support.nii.ac.jp/en/cinii/api/developer "
-            f"and set the {_KAKEN_APP_ID_ENV} environment variable."
-        )
-    return app_id
+    for th in soup.find_all("th"):
+        label = th.get_text(strip=True)
+        td = th.find_next_sibling("td")
+        if td is None:
+            continue
 
+        if "Budget Amount" in label:
+            m = re.search(r"¥([\d,]+)", td.get_text())
+            if m:
+                try:
+                    amount = float(m.group(1).replace(",", ""))
+                except ValueError:
+                    pass
 
-def _fy_start_date(fy: str) -> date:
-    """Japanese fiscal year start: April 1 of the given year."""
-    return date(int(fy), 4, 1)
+        elif "Project Period" in label:
+            iso_dates = re.findall(r"\d{4}-\d{2}-\d{2}", td.get_text())
+            if len(iso_dates) >= 2:
+                try:
+                    start_date = date.fromisoformat(iso_dates[0])
+                    end_date = date.fromisoformat(iso_dates[1])
+                except ValueError:
+                    pass
 
-
-def _fy_end_date(fy: str) -> date:
-    """Japanese fiscal year end: March 31 of the following year."""
-    return date(int(fy) + 1, 3, 31)
-
-
-def _extract_scalar(value: object) -> str | None:
-    """Unwrap a JSON-LD @value dict or return a plain string/int as-is."""
-    if isinstance(value, dict):
-        return str(value.get("@value", "")) or None
-    if value is not None:
-        return str(value)
-    return None
+    return AwardDetails(
+        funder_id=FUNDER_ID,
+        award_id=award_id,
+        amount_funded=amount,
+        currency="JPY",
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 
 def get_award_details(
@@ -85,22 +89,6 @@ def get_award_details(
     cache_dir: Path,
     force_refresh: bool,
 ) -> AwardDetailsResult:
-    try:
-        app_id = _get_app_id()
-    except ValueError as exc:
-        return AwardDetailsResult(
-            found=[],
-            not_found=[
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=aid,
-                    reason=NotFoundReason.API_ERROR,
-                    detail=str(exc),
-                )
-                for aid in award_ids
-            ],
-        )
-
     found: list[AwardDetails] = []
     not_found: list[AwardNotFound] = []
 
@@ -108,15 +96,11 @@ def get_award_details(
         if i > 0:
             time.sleep(_KAKEN_RATE_LIMIT_SLEEP + random.uniform(0.0, 0.5))
 
-        # Strip JP citation prefix for the lookup key.
         lookup_id = award_id[2:] if award_id.startswith("JP") else award_id
+        url = _KAKEN_GRANT_URL.format(id=lookup_id)
 
         try:
-            resp = requests.get(
-                _KAKEN_API_URL,
-                params={"kenkyuuKadaiKiban": lookup_id, "appid": app_id, "format": "json"},
-                timeout=30,
-            )
+            resp = requests.get(url, timeout=30)
         except requests.exceptions.RequestException as exc:
             not_found.append(
                 AwardNotFound(
@@ -124,6 +108,17 @@ def get_award_details(
                     input_text=award_id,
                     reason=NotFoundReason.API_ERROR,
                     detail=str(exc),
+                )
+            )
+            continue
+
+        if resp.status_code == 404:
+            not_found.append(
+                AwardNotFound(
+                    funder_id=FUNDER_ID,
+                    input_text=award_id,
+                    reason=NotFoundReason.NOT_FOUND,
+                    detail="Grant not found in KAKEN database",
                 )
             )
             continue
@@ -151,88 +146,16 @@ def get_award_details(
             continue
 
         try:
-            data = resp.json()
-        except ValueError:
-            print(resp)
-            print(resp.content)
+            found.append(_parse_grant_page(resp.text, award_id))
+        except Exception as exc:
             not_found.append(
                 AwardNotFound(
                     funder_id=FUNDER_ID,
                     input_text=award_id,
                     reason=NotFoundReason.PARSE_ERROR,
-                    detail="Non-JSON response from KAKEN API",
+                    detail=f"Failed to parse KAKEN page: {exc}",
                 )
             )
-            continue
-
-        # OpenSearch totalResults — may be a plain string or a JSON-LD {"@value": "N"} dict.
-        total_raw = data.get("opensearch:totalResults", data.get("totalResults", "0"))
-        total_str = _extract_scalar(total_raw) or "0"
-        if int(total_str) == 0:
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.NOT_FOUND,
-                    detail="No results in KAKEN database",
-                )
-            )
-            continue
-
-        try:
-            items = data.get("items", [])
-            if not items:
-                raise KeyError("items")
-            item = items[0]
-
-            # Funding amount in JPY — try field name variants across API versions.
-            amount: float | None = None
-            for key in ("kaken:totalBudget", "kaken:totalAmount", "kaken:grantAmount"):
-                raw = item.get(key)
-                if raw is not None:
-                    scalar = _extract_scalar(raw)
-                    if scalar:
-                        try:
-                            amount = float(scalar.replace(",", ""))
-                        except ValueError:
-                            pass
-                    break
-
-            # Fiscal year fields — KAKEN uses Japanese FY (April-March).
-            start_fy: str | None = None
-            end_fy: str | None = None
-            for key in ("kaken:startYear", "kaken:firstYear", "kaken:fiscalStartYear"):
-                v = _extract_scalar(item.get(key))
-                if v:
-                    start_fy = v
-                    break
-            for key in ("kaken:endYear", "kaken:lastYear", "kaken:fiscalEndYear"):
-                v = _extract_scalar(item.get(key))
-                if v:
-                    end_fy = v
-                    break
-
-        except (KeyError, IndexError, TypeError, ValueError) as exc:
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.PARSE_ERROR,
-                    detail=f"Unexpected KAKEN response structure: {exc}",
-                )
-            )
-            continue
-
-        found.append(
-            AwardDetails(
-                funder_id=FUNDER_ID,
-                award_id=award_id,
-                amount_funded=amount,
-                currency="JPY",
-                start_date=_fy_start_date(start_fy) if start_fy else None,
-                end_date=_fy_end_date(end_fy) if end_fy else None,
-            )
-        )
 
     return AwardDetailsResult(found=found, not_found=not_found)
 
@@ -241,7 +164,7 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     source="plans/jsps_kakenhi_spec.md",
-    verified_awards=(),
+    verified_awards=("22H00521",),
     matching_ids=(
         # Standard `YY` + letter code + 5-digit serial.
         "24K22291",
