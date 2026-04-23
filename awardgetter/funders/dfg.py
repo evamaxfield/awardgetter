@@ -368,7 +368,16 @@ def get_award_details(
             )
             continue
 
-        found.append(details)
+        found.append(
+            AwardDetails(
+                funder_id=FUNDER_ID,
+                award_id=award_id,
+                amount_funded=details.amount_funded,
+                currency=details.currency,
+                start_date=details.start_date,
+                end_date=details.end_date,
+            )
+        )
 
     return AwardDetailsResult(found=found, not_found=not_found)
 

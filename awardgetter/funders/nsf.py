@@ -20,8 +20,7 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 _NSF_WORD_RE = re.compile(r"\bNSF\b", re.IGNORECASE)
 _NSF_LETTER_PREFIX_RE = re.compile(r"\b[A-Z]{2,4}(?=\d)")
 _DIGIT_SEPARATOR_DIGIT_RE = re.compile(r"(\d)[\s\-]+(\d)")
-_NSF_AWARD_ID_RE = re.compile(r"\b\d{7}\b")
-_NSF_AWARD_ID_EXTRACT_RE = re.compile(r"\b\d{5,7}\b")
+_NSF_AWARD_ID_RE = re.compile(r"\b\d{5,7}\b")
 
 _NSF_API_URL = (
     "https://api.nsf.gov/services/v1/awards.json"
@@ -41,7 +40,7 @@ def check_award_id(text: str) -> bool:
 
 
 def extract_award_ids(text: str) -> list[str]:
-    return _NSF_AWARD_ID_EXTRACT_RE.findall(_normalize(text))
+    return _NSF_AWARD_ID_RE.findall(_normalize(text))
 
 
 def get_award_details(
@@ -140,7 +139,7 @@ EXAMPLES = FunderExamples(
         "2211275",
     ),
     matching_ids=(
-        # NSF agency word is stripped, then 7-digit match.
+        # NSF agency word is stripped, then 5-7 digit match.
         "NSF-2211275",
         "NSF 1728743",
         # Generic surrounding text.
@@ -151,6 +150,8 @@ EXAMPLES = FunderExamples(
         "DEB1657662",
         "OCE1238212",
         "MCB2046798",
+        # Shorter IDs from papers that omit leading zeros — zero-padded for API lookup.
+        "131060",
     ),
     not_found_awards=(
         # 7-digit format-valid IDs that are clearly fabricated.
@@ -159,9 +160,8 @@ EXAMPLES = FunderExamples(
         "0000001",
     ),
     rejected_ids=(
-        # Wrong digit counts — 6-digit and 8-digit numbers not matched by check_award_id.
+        # Wrong digit counts — 8-digit numbers not matched by check_award_id.
         "62206216",
-        "131060",
         # Cross-funder distractors where prefix stripping leaves no 7-digit run.
         "EP/S00923X/1",
         "ANR-21-CE29-0003",

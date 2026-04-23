@@ -82,8 +82,8 @@ KNOWN_AMBIGUOUS_CASES: tuple[tuple[str, frozenset[str]], ...] = (
     ("2034901", frozenset({"nsf", "nsfc", "ec_cordis", "epsrc_ukri", "dfg"})),
     ("1956322", frozenset({"nsf", "nsfc", "ec_cordis", "epsrc_ukri", "dfg"})),
     # 6-digit numerics: only CORDIS (\d{6,9}); DFG GEPRIS requires 7+ digits.
-    ("948381", frozenset({"ec_cordis"})),
-    ("602150", frozenset({"ec_cordis"})),
+    ("948381", frozenset({"ec_cordis", "nsf"})),
+    ("602150", frozenset({"ec_cordis", "nsf"})),
     # 8-digit numerics: NSFC (\d{7,11}), CORDIS (\d{6,9}), DFG GEPRIS (\d{7,9}).
     ("62206216", frozenset({"nsfc", "ec_cordis", "dfg"})),
     # 9-digit numerics: NSFC, CORDIS, DFG GEPRIS.
