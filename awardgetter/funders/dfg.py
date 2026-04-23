@@ -46,7 +46,16 @@ _GEPRIS_EMBEDDED_RE = re.compile(r"(?<!\d)(\d{7,9})(?!\d)")
 
 # Bare 7-9 digit GEPRIS IDs (whole input) or "project ID XXXXXXXXX" form.
 _GEPRIS_BARE_RE = re.compile(r"^\s*\d{7,9}\s*$")
-_GEPRIS_ID_PREFIX_RE = re.compile(r"\bID\s+(\d{7,9})\b")
+# Matches "project ID", "Number:", "Nr.", "Nummer", "Projekt-Nr." etc. before a GEPRIS ID.
+_GEPRIS_ID_PREFIX_RE = re.compile(
+    r"\b(?:ID|Number|Nr\.?|Nummer)[:\s]+(\d{7,9})\b",
+    re.IGNORECASE,
+)
+# Matches "Projektnummer", "Projekt-ID", "Projekt Nr." etc. — German-language variants.
+_GEPRIS_PROJECT_LABEL_RE = re.compile(
+    r"\bProjekt(?:nummer|[-\s]+(?:ID|Nr\.?|Number))[:\s]+(\d{7,9})\b",
+    re.IGNORECASE,
+)
 
 # Matches a pure GEPRIS numeric ID (what extract_award_ids returns for embedded IDs).
 _GEPRIS_NUMERIC_RE = re.compile(r"^\d{7,9}$")
@@ -70,7 +79,12 @@ _DFG_SUBPROJECT_IN_H1_RE_TEMPLATE = r"\({code}\)\s*$"
 
 def check_award_id(text: str) -> bool:
     s = normalize_dashes(text)
-    return bool(_DFG_RE.search(s))
+    return bool(
+        _DFG_RE.search(s)
+        or _GEPRIS_BARE_RE.match(s)
+        or _GEPRIS_ID_PREFIX_RE.search(s)
+        or _GEPRIS_PROJECT_LABEL_RE.search(s)
+    )
 
 
 def _collect_unique(items: list[str], seen: set[str], results: list[str]) -> None:
@@ -113,8 +127,9 @@ def extract_award_ids(text: str) -> list[str]:
     if _GEPRIS_BARE_RE.match(s):
         return [s.strip()]
 
-    # "project ID XXXXXXXXX" or "ID XXXXXXXXX" pattern.
+    # "project ID XXXXXXXXX", "Number: XXXXXXXXX", "Projekt-Nr. XXXXXXXXX" patterns.
     _collect_unique(_GEPRIS_ID_PREFIX_RE.findall(s), seen, results)
+    _collect_unique(_GEPRIS_PROJECT_LABEL_RE.findall(s), seen, results)
     if results:
         return results
 
@@ -386,6 +401,17 @@ EXAMPLES = FunderExamples(
         "EXC-2189",
         # Mixed-case input — IGNORECASE handles it.
         "Sfb 951",
+        # Extended label variants for GEPRIS numeric IDs.
+        "Project Number: 390683824",
+        "Projekt Nr. 511886499",
+        "EXC 2070 Nummer 390732324",
+        # Bare GEPRIS numeric IDs — format-valid, but these specific IDs may or may
+        # not exist in GEPRIS; included here to confirm the lookup path runs.
+        "39087428",
+        "455548460",
+        "460037581",
+        "396611854",
+        "460247524",
     ),
     not_found_awards=(
         # Programme number 9999 does not exist in GEPRIS.
@@ -394,13 +420,6 @@ EXAMPLES = FunderExamples(
         "RTG9999",
     ),
     rejected_ids=(
-        # Bare GEPRIS numeric IDs — explicitly excluded by the DFG matcher to
-        # avoid colliding with NSF/NSFC/CORDIS. See awardgetter/funders/dfg.py.
-        "39087428",
-        "455548460",
-        "460037581",
-        "396611854",
-        "460247524",
         # Digit-first references — no leading letter code.
         "2315/11-1",
         # Free-text labels.
@@ -440,6 +459,12 @@ EXAMPLES = FunderExamples(
         ExtractionExample(
             text="FOR 5249_449872909",
             expected_extracted=("449872909",),
+            verified_existing=(),
+        ),
+        # "Project Number:" label prefix — extended _GEPRIS_ID_PREFIX_RE extracts it.
+        ExtractionExample(
+            text="Project Number: 390683824",
+            expected_extracted=("390683824",),
             verified_existing=(),
         ),
         # Sub-project reference — encoded as "PROGRAMME#SUBPROJECT".

@@ -78,15 +78,16 @@ def test_unique_match(text: str, expected_funder: str) -> None:
 
 # Deliberate overlaps. See awardgetter/match.py:11-14.
 KNOWN_AMBIGUOUS_CASES: tuple[tuple[str, frozenset[str]], ...] = (
-    # Bare 7-digit numerics: NSF (\d{7}), NSFC (\d{7,11}), CORDIS (\d{6,9}).
-    ("2034901", frozenset({"nsf", "nsfc", "ec_cordis", "epsrc_ukri"})),
-    ("1956322", frozenset({"nsf", "nsfc", "ec_cordis", "epsrc_ukri"})),
-    # 6-digit numerics: only CORDIS (\d{6,9}).
+    # Bare 7-digit numerics: NSF (\d{7}), NSFC (\d{7,11}), CORDIS (\d{6,9}), DFG (\d{7,9}).
+    ("2034901", frozenset({"nsf", "nsfc", "ec_cordis", "epsrc_ukri", "dfg"})),
+    ("1956322", frozenset({"nsf", "nsfc", "ec_cordis", "epsrc_ukri", "dfg"})),
+    # 6-digit numerics: only CORDIS (\d{6,9}); DFG GEPRIS requires 7+ digits.
     ("948381", frozenset({"ec_cordis"})),
     ("602150", frozenset({"ec_cordis"})),
-    # 8-digit numerics: NSFC (\d{7,11}) and CORDIS (\d{6,9}); NSF needs exactly 7.
-    ("62206216", frozenset({"nsfc", "ec_cordis"})),
-    ("101069595", frozenset({"nsfc", "ec_cordis"})),
+    # 8-digit numerics: NSFC (\d{7,11}), CORDIS (\d{6,9}), DFG GEPRIS (\d{7,9}).
+    ("62206216", frozenset({"nsfc", "ec_cordis", "dfg"})),
+    # 9-digit numerics: NSFC, CORDIS, DFG GEPRIS.
+    ("101069595", frozenset({"nsfc", "ec_cordis", "dfg"})),
     # Hyphenated NSFC ID: NSFC matches the 8-digit prefix, CORDIS too.
     ("20221279-ZKT03", frozenset({"nsfc", "ec_cordis"})),
     # DoE ID also matches NSF: letter-prefix stripping yields 7-digit 0021358.

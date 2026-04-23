@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from .._award import AwardDetailsResult
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "nkrdp"
@@ -24,7 +24,15 @@ def check_award_id(text: str) -> bool:
 
 
 def extract_award_ids(text: str) -> list[str]:
-    raise NotImplementedError
+    s = normalize_dashes(text)
+    seen: set[str] = set()
+    result: list[str] = []
+    for m in _NKRDP_RE.finditer(s):
+        item = m.group()
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 def get_award_details(
@@ -32,7 +40,16 @@ def get_award_details(
     cache_dir: Path,
     force_refresh: bool,
 ) -> AwardDetailsResult:
-    raise NotImplementedError
+    # Not implemented: the official MoST portal (service.most.gov.cn) requires
+    # authentication for project detail lookups, and the third-party aggregator
+    # (funresearch.cn) that indexes NKRDP data requires a paid subscription.
+    # See plans/nkrdp_spec.md for investigation notes.
+    raise NotImplementedError(
+        "NKRDP get_award_details is not implemented. "
+        "The official MoST portal (service.most.gov.cn) requires login, "
+        "and no publicly accessible API has been found. "
+        "See plans/nkrdp_spec.md."
+    )
 
 
 EXAMPLES = FunderExamples(
@@ -80,5 +97,16 @@ EXAMPLES = FunderExamples(
         "DE-SC0021358",
         "ANR-21-CE29-0003",
     ),
-    extraction_texts=(),
+    extraction_texts=(
+        ExtractionExample(
+            text="funded by NKRD grants 2022ZD0160401 and 2020YFA0712402",
+            expected_extracted=("2022ZD0160401", "2020YFA0712402"),
+            verified_existing=(),
+        ),
+        ExtractionExample(
+            text="This work was supported by 2020AAA0105601 and 2021QNRC001.",
+            expected_extracted=("2020AAA0105601", "2021QNRC001"),
+            verified_existing=(),
+        ),
+    ),
 )

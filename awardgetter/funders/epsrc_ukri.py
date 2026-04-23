@@ -47,6 +47,9 @@ _GTR_RATE_LIMIT_SLEEP = 1.0
 
 def _normalize_epsrc(text: str) -> str:
     s = normalize_dashes(text)
+    # Collapse errant space after two-letter council prefix and slash:
+    # "EP/ L016796/1" → "EP/L016796/1"
+    s = re.sub(r"\b([A-Z]{2})/ +", r"\1/", s)
     return _UKRI_MISSING_SLASH_RE.sub(r"\1/\2", s)
 
 
@@ -221,6 +224,9 @@ EXAMPLES = FunderExamples(
         "EP/N007638",
         # Missing '/' separator between council prefix and grant body — normalised.
         "EPN036106/1",
+        # Errant space after council prefix slash — collapsed before matching.
+        "EP/ L016796/1",
+        "MR/ T018429/1",
     ),
     not_found_awards=(
         # Z-prefix references do not exist in the GtR database.

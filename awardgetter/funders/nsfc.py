@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 from .._award import AwardDetailsResult
-from .._spec import FunderExamples
+from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
 
 FUNDER_ID: str = "nsfc"
@@ -24,7 +24,17 @@ def check_award_id(text: str) -> bool:
 
 
 def extract_award_ids(text: str) -> list[str]:
-    raise NotImplementedError
+    s = normalize_dashes(text)
+    # For hyphenated IDs like "20221279-ZKT03", capture only the numeric prefix.
+    numeric = [m.group() for m in _NSFC_NUMERIC_RE.finditer(s)]
+    joint = [m.group() for m in _NSFC_JOINT_FUND_RE.finditer(s)]
+    seen: set[str] = set()
+    result: list[str] = []
+    for item in numeric + joint:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 def get_award_details(
@@ -32,7 +42,15 @@ def get_award_details(
     cache_dir: Path,
     force_refresh: bool,
 ) -> AwardDetailsResult:
-    raise NotImplementedError
+    # Not implemented: the primary source (kd.nsfc.gov.cn) is DNS-unreachable
+    # outside China, and third-party aggregators that do expose an API require
+    # paid subscriptions. See plans/nsfc_scraper_spec.md for investigation notes.
+    raise NotImplementedError(
+        "NSFC get_award_details is not implemented. "
+        "The primary portal (kd.nsfc.gov.cn) is inaccessible outside China "
+        "and no publicly usable API has been found. "
+        "See plans/nsfc_scraper_spec.md."
+    )
 
 
 EXAMPLES = FunderExamples(
@@ -79,5 +97,16 @@ EXAMPLES = FunderExamples(
         "EP/S00923X/1",
         "ANR-21-CE29-0003",
     ),
-    extraction_texts=(),
+    extraction_texts=(
+        ExtractionExample(
+            text="Funded by NSFC grants 62206216 and U1936210.",
+            expected_extracted=("62206216", "U1936210"),
+            verified_existing=(),
+        ),
+        ExtractionExample(
+            text="supported by 61661146007 and 61711540303",
+            expected_extracted=("61661146007", "61711540303"),
+            verified_existing=(),
+        ),
+    ),
 )

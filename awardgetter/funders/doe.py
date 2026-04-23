@@ -40,6 +40,8 @@ _DOE_SC_BARE_RE = re.compile(r"(?<![A-Z\-])SC(\d{7,10})\b", re.IGNORECASE)
 _DOE_AC_BARE_RE = re.compile(r"(?<![A-Z\d])AC(\d{2}[-])", re.IGNORECASE)
 # Leading hyphen before AC (e.g. "-AC02-05CH11231").
 _DOE_LEADING_HYPHEN_RE = re.compile(r"^-AC\d{2}-", re.IGNORECASE)
+# Collapse errant space within a DE-format component: "DE-AC02- 06CH11357" → "DE-AC02-06CH11357"
+_DOE_INTERNAL_SPACE_RE = re.compile(r"\b(DE-?[A-Z]{2}-?) (\d)", re.IGNORECASE)
 
 # Management & Operating contracts: DE-AC{NN}-{YY}{XX}{NNNNN}
 # These are lab-wide umbrella contracts, not individual research grants.
@@ -92,6 +94,8 @@ def _normalize_doe(text: str) -> str:
         s = s[1:]
     # Prepend "DE-" to bare AC\d{2}- patterns missing the prefix.
     s = _DOE_AC_BARE_RE.sub(r"DE-AC\1", s)
+    # Collapse errant space within DE-format components (e.g. "DE-AC02- 06CH11357").
+    s = _DOE_INTERNAL_SPACE_RE.sub(r"\1\2", s)
     return s
 
 
@@ -271,6 +275,9 @@ EXAMPLES = FunderExamples(
         # Bare AC\d{2}- with missing DE- prefix — normalised to DE-AC... before matching.
         "AC05-06OR23177",
         "-AC02-05CH11231",
+        # Errant space within DE-format components — collapsed before matching.
+        "DE-AC02- 06CH11357",
+        "DE-SC- 0018660",
     ),
     not_found_awards=(
         # Bare SC ID that normalises but grant does not exist in USASpending.

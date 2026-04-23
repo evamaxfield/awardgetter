@@ -16,6 +16,7 @@ FUNDER_ALTERNATE_IDS: tuple[str, ...] = ("snf",)
 FUNDER_ALTERNATE_NAMES: tuple[str, ...] = (
     "Schweizerischer Nationalfonds",
     "Fonds national suisse",
+    "Schweizerischer Nationalfonds zur Förderung der Wissenschaftlichen Forschung",
 )
 FUNDER_OPENALEX_ID: str = "F4320320924"
 FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
@@ -38,6 +39,8 @@ _SNSF_RE = re.compile(
     # Digit-heavy prefix with 1-2 letter suffix (32003B, 31003A, 3100A) — mandatory
     # separator; space allowed since these patterns are digit-first and unambiguous.
     r"|\b\d{4,6}[A-Z]{1,2}[_\s-]\d{5,7}\b"
+    # Year+programme+call digit-starting prefix (20FI20, 10DL17, 33CS30) — mandatory separator.
+    r"|\b\d{2}[A-Z]{2}\d{1,2}[_-]\d{5,7}\b"
     # Purely numeric composite IDs (205321-144529) — mandatory separator.
     r"|\b\d{5,6}[_-]\d{5,7}\b"
 )
@@ -47,7 +50,7 @@ _SNSF_NUMERIC_RE = re.compile(r"\b\d{5,6}\b")
 
 # Bulk CSV from the SNSF Data Portal. Verify this URL if downloads fail —
 # the portal may update the export path.
-_SNSF_CSV_URL = "https://data.snf.ch/public_storage/datasets/Grant.csv"
+_SNSF_CSV_URL = "https://data.snf.ch/datasets/grants.csv"
 _SNSF_CSV_FILENAME = "snsf_grants.csv"
 
 _STRIP_HASH_RE = re.compile(r"^#")
@@ -61,6 +64,10 @@ _SNSF_PREFIX_DIRECT_RE = re.compile(
     r"^(200021L?|200020|51NF40|CRSII\d?|CRSK(?:-?\d)?|PP00P\d?|PP\d{4}|PZ00P\d?|PDFMP\d?"
     r"|PBZHP\d?|P\d{3}[A-Z]+|IZ[A-Z]+\d*|CR\d+I\d*)(\d{4,7})$"
 )
+# Strip SNF/SNSF keyword before matching — often appears before the grant number.
+_SNSF_KEYWORD_RE = re.compile(r"\b(?:SNSF|SNF)\b", re.IGNORECASE)
+# Extract the trailing numeric serial from a cleaned SNSF grant number.
+_SNSF_SERIAL_SUFFIX_RE = re.compile(r"[_-](\d{5,7})$")
 
 
 def _parse_snsf_date(s: str | None):
@@ -82,17 +89,39 @@ def _clean_grant_number(raw: str) -> str:
     m = _SNSF_PREFIX_DIRECT_RE.match(s)
     if m:
         return m.group(1) + "_" + m.group(2)
-    return _NORMALIZE_SEP_RE.sub(r"\1_\2", s)
+    s = _NORMALIZE_SEP_RE.sub(r"\1_\2", s)
+    # Collapse any remaining internal space between alphanumeric and digit
+    # (e.g. "CRSK_2 190840" → "CRSK_2_190840").
+    s = re.sub(r"([A-Z0-9]) (\d)", r"\1_\2", s)
+    return s
+
+
+def _extract_serial(clean_id: str) -> str | None:
+    """Return the trailing numeric serial from a cleaned SNSF grant number.
+
+    '200021_166275' → '166275'; '166275' (bare numeric) → '166275'.
+    """
+    m = _SNSF_SERIAL_SUFFIX_RE.search(clean_id)
+    if m:
+        return m.group(1)
+    if re.match(r"^\d{5,6}$", clean_id):
+        return clean_id
+    return None
+
+
+def _normalize_snsf(text: str) -> str:
+    s = normalize_dashes(text)
+    s = s.lstrip("#")
+    return _SNSF_KEYWORD_RE.sub(" ", s)
 
 
 def check_award_id(text: str) -> bool:
-    s = normalize_dashes(text)
-    s = s.lstrip("#")
+    s = _normalize_snsf(text)
     return bool(_SNSF_RE.search(s))
 
 
 def extract_award_ids(text: str) -> list[str]:
-    s = normalize_dashes(text)
+    s = _normalize_snsf(text)
     matches = _SNSF_RE.findall(s) + _SNSF_NUMERIC_RE.findall(s)
     return [_clean_grant_number(m) for m in matches]
 
@@ -126,14 +155,14 @@ def get_award_details(
             )
         return AwardDetailsResult(found=found, not_found=not_found)
 
-    if "GrantNumberString" not in df.columns:
+    if "GrantNumber" not in df.columns:
         for aid in award_ids:
             not_found.append(
                 AwardNotFound(
                     funder_id=FUNDER_ID,
                     input_text=aid,
                     reason=NotFoundReason.CACHE_ERROR,
-                    detail="Unexpected CSV format: 'GrantNumberString' column not found",
+                    detail="Unexpected CSV format: 'GrantNumber' column not found",
                 )
             )
         return AwardDetailsResult(found=found, not_found=not_found)
@@ -141,7 +170,7 @@ def get_award_details(
     cols = [
         c
         for c in [
-            "GrantNumberString",
+            "GrantNumber",
             "AmountGrantedAllSets",
             "EffectiveGrantStartDate",
             "EffectiveGrantEndDate",
@@ -149,13 +178,14 @@ def get_award_details(
         if c in df.columns
     ]
     lookup: dict[str, dict] = {
-        _clean_grant_number(str(row["GrantNumberString"])): row
+        str(row["GrantNumber"]).strip(): row
         for row in df.select(cols).to_dicts()
-        if row.get("GrantNumberString")
+        if row.get("GrantNumber")
     }
 
     for award_id in award_ids:
-        row = lookup.get(_clean_grant_number(award_id))
+        serial = _extract_serial(_clean_grant_number(award_id))
+        row = lookup.get(serial) if serial else None
         if row is None:
             not_found.append(
                 AwardNotFound(
@@ -236,6 +266,13 @@ EXAMPLES = FunderExamples(
         "P2ELP2 187955",
         # Digit-heavy prefix with space separator.
         "3100A 132951/1",
+        # SNF/SNSF keyword stripped before matching.
+        "SNF 200021_178742",
+        "SNSF PP00P3_170683",
+        # Year+programme+call digit-starting prefixes (20FI20_, 10DL17_, 33CS30_).
+        "20FI20_173691",
+        "10DL17_183008",
+        "33CS30_148415",
     ),
     not_found_awards=(
         # Serial 999999 does not appear in the SNSF bulk CSV.
@@ -263,6 +300,12 @@ EXAMPLES = FunderExamples(
             text="Funding from SNSF 200021_166275 and 200021_213074 enabled this study.",
             expected_extracted=("200021_166275", "200021_213074"),
             verified_existing=("200021_166275", "200021_213074"),
+        ),
+        # SNSF keyword is stripped before matching, so grant IDs are still extracted.
+        ExtractionExample(
+            text="SNSF grant 200021_166275 supported this work.",
+            expected_extracted=("200021_166275",),
+            verified_existing=("200021_166275",),
         ),
     ),
 )

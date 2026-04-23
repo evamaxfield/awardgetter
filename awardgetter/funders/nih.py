@@ -90,7 +90,7 @@ _NIH_REPORTER_URL = "https://api.reporter.nih.gov/v2/projects/search"
 _NIH_BATCH_SIZE = 50
 
 _STRIP_APP_TYPE_RE = re.compile(r"^\d")
-_STRIP_SUPPORT_YEAR_RE = re.compile(r"-\d{1,2}[A-Z]*$")
+_STRIP_SUPPORT_YEAR_RE = re.compile(r"-\d{1,2}(?:[A-Z]\d*)?$")
 _FIX_ACTIVITY_O_RE = re.compile(r"^([A-Z])O(\d[A-Z]{2})")
 _ZERO_PAD_SERIAL_RE = re.compile(r"([A-Z]{2})(\d+)$")
 _NIH_BARE_SERIAL_RE = re.compile(r"\b[A-Z]{2}\d{5,6}\b")
@@ -203,6 +203,12 @@ def _normalize(text: str) -> str:
     return _NIH_SUPPL_RE.sub(" ", s)
 
 
+def _normalize_no_brackets(text: str) -> str:
+    s = normalize_dashes(text)
+    s = _NIH_AGENCY_WORDS_RE.sub(" ", s)
+    return _NIH_SUPPL_RE.sub(" ", s)
+
+
 def _base_project_num(num: str) -> str:
     """Return the core project number stripped of application-type digit and support year."""
     s = _STRIP_APP_TYPE_RE.sub("", num.upper().strip())
@@ -226,22 +232,27 @@ def _zero_pad_serial(s: str) -> str:
 
 
 def check_award_id(text: str) -> bool:
-    normalized = _normalize(text)
-    return bool(_NIH_CORE_PATTERN.search(normalized) or _NIH_BARE_SERIAL_RE.search(normalized))
+    for norm in (_normalize_no_brackets(text), _normalize(text)):
+        if _NIH_CORE_PATTERN.search(norm) or _NIH_BARE_SERIAL_RE.search(norm):
+            return True
+    return False
 
 
 def extract_award_ids(text: str) -> list[str]:
+    # Try without bracket stripping first so IDs inside brackets aren't lost.
+    for norm in (_normalize_no_brackets(text), _normalize(text)):
+        matches = _NIH_CORE_PATTERN.findall(norm)
+        if matches:
+            return [
+                _zero_pad_serial(
+                    _normalize_activity_code(re.sub(r"[-\s]+", "", _base_project_num(m)))
+                )
+                for m in matches
+            ]
     normalized = _normalize(text)
-    matches = _NIH_CORE_PATTERN.findall(normalized)
-    results = [
-        _zero_pad_serial(_normalize_activity_code(re.sub(r"[-\s]+", "", _base_project_num(m))))
-        for m in matches
-    ]
-    if not results:
-        # Fallback: bare institute+serial without activity code — will likely be NOT_FOUND
-        # but converts PARSE_ERROR → NOT_FOUND for better observability.
-        results = _NIH_BARE_SERIAL_RE.findall(normalized)
-    return results
+    # Fallback: bare institute+serial without activity code — will likely be NOT_FOUND
+    # but converts PARSE_ERROR → NOT_FOUND for better observability.
+    return _NIH_BARE_SERIAL_RE.findall(normalized)
 
 
 def _aggregate_rows(award_id: str, rows: list[dict]) -> AwardDetails:
@@ -361,6 +372,13 @@ EXAMPLES = FunderExamples(
         "RO1-MH-075916",
         # Short (5-digit) serial — zero-padded to 6.
         "R01 GM60595",
+        # Grant ID inside parentheses — two-pass bracket handling extracts it.
+        "(P30 CA015704)",
+        # Revision/supplement suffixes (-01A1, -02S1) stripped by updated regex.
+        "1R01CA248422-01A1",
+        "3R01HL-117626-02S1",
+        # Bracket with app-type digit and revision suffix.
+        "[2R01HG007182-04A1]",
     ),
     not_found_awards=(
         # Fake institute codes (ZZ, XX, YY) — format-valid but nonexistent in NIH RePORTER.
@@ -389,6 +407,12 @@ EXAMPLES = FunderExamples(
             text="NIH grants 5U24NS124001-05 and 5U24CA086368-25 funded this work.",
             expected_extracted=("U24NS124001", "U24CA086368"),
             verified_existing=("U24NS124001", "U24CA086368"),
+        ),
+        # Revision suffix (-01A1) stripped correctly.
+        ExtractionExample(
+            text="1R01CA248422-01A1",
+            expected_extracted=("R01CA248422",),
+            verified_existing=(),
         ),
     ),
 )

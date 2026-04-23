@@ -18,17 +18,19 @@ FUNDER_ALTERNATE_NAMES: tuple[str, ...] = ("Agence nationale de la recherche",)
 FUNDER_OPENALEX_ID: str = "F4320320883"
 FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 
-# Standard ANR reference: ANR-YY-XXXX-NNNN(-S), where XXXX is a 2-6 char
-# programme code (CE##, JCJC, MRSEI, MPGA, LABX, EQPX, IDEX, INBS, NEUC,
-# PCPA, ...).
-_ANR_WITH_PREFIX_RE = re.compile(r"\bANR-\d{2}-[A-Z]{2,6}\d*-\d+(?:-\d+)?\b")
+# Standard ANR reference: ANR-YY-XXXX-NNNN(-S), where XXXX is a letter-first
+# 2-8 alphanumeric programme code (CE##, JCJC, MRSEI, LABX, P3IA, CHIA, IAS1...).
+# Lookahead replaces \b at end: underscore is \w so \b won't fire at "LABX-0036_NETRN".
+_ANR_WITH_PREFIX_RE = re.compile(r"\bANR-\d{2}-[A-Z][A-Z0-9]{1,7}-\d+(?:-\d+)?(?=[^A-Z0-9]|$)")
 
-# No-prefix form seen in acknowledgements: 10-INBS-09-08, 16-IDEX-0004,
-# 20-PCPA-0010. Only accept a closed set of programme codes so we don't
-# false-match arbitrary date-like strings.
-_ANR_NO_PREFIX_RE = re.compile(
-    r"\b\d{2}-(?:LABX|EQPX|IDEX|INBS|NEUC|PCPA|JCJC|MRSEI|MPGA|CE\d+)-\d+(?:-\d+)?\b"
-)
+# No-prefix form seen in acknowledgements: 10-INBS-09-08, 16-IDEX-0004, 20-PCPA-0010.
+# Use the same letter-first alphanumeric code structure — distinctive enough to avoid
+# false matches on arbitrary date-like strings.
+_ANR_NO_PREFIX_RE = re.compile(r"\b\d{2}-[A-Z][A-Z0-9]{1,7}-\d+(?:-\d+)?(?=[^A-Z0-9]|$)")
+
+# Missing-hyphen normalization: "ANR18CE310019" → "ANR-18-CE310019"
+_ANR_MISSING_HYPHEN_1_RE = re.compile(r"\bANR(\d{2})-", re.IGNORECASE)
+_ANR_MISSING_HYPHEN_2_RE = re.compile(r"\bANR-(\d{2})([A-Z])", re.IGNORECASE)
 
 # Stable data.gouv.fr resource permalink URLs (redirect to latest file).
 # Resource IDs are stable even when the underlying file is republished.
@@ -54,12 +56,27 @@ _ANR_PIA_CODE_COL = "Projet.Code_Decision_ANR"
 _ANR_PIA_AMOUNT_COL = "Projet.Aide_allouee"
 _ANR_PIA_START_COL = "Projet.Date_debut"
 
-_ANR_PROJECT_NUM_RE = re.compile(r"^(ANR-\d{2}-[A-Z]{2,6}\d*-)(\d+)((?:-\d+)?)$")
+_ANR_PROJECT_NUM_RE = re.compile(r"^(ANR-\d{2}-[A-Z][A-Z0-9]{1,7}-)(\d+)((?:-\d+)?)$")
+
+
+def _normalize_anr_code(ref: str) -> str:
+    """Normalize known programme-code abbreviations to the canonical CSV form."""
+    return (
+        ref.replace("-LABEX-", "-LABX-").replace("-LBX-", "-LABX-").replace("-INSB-", "-INBS-")
+    )
+
+
+def _normalize_anr(text: str) -> str:
+    """Pre-process ANR text: normalize dashes and fix missing hyphens after ANR."""
+    s = normalize_dashes(text)
+    s = _ANR_MISSING_HYPHEN_1_RE.sub(r"ANR-\1-", s)
+    s = _ANR_MISSING_HYPHEN_2_RE.sub(r"ANR-\1-\2", s)
+    return s
 
 
 def _anr_lookup_keys(ref: str) -> list[str]:
     """Return candidate lookup keys: original, zero-padded, and suffix-stripped variants."""
-    ref = ref.upper()
+    ref = _normalize_anr_code(ref.upper())
     m = _ANR_PROJECT_NUM_RE.match(ref)
     if m:
         prefix, num, suffix = m.groups()
@@ -96,21 +113,21 @@ def _parse_anr_date(s: str | None):
 
 
 def check_award_id(text: str) -> bool:
-    s = normalize_dashes(text)
+    s = _normalize_anr(text)
     return bool(_ANR_WITH_PREFIX_RE.search(s) or _ANR_NO_PREFIX_RE.search(s))
 
 
 def extract_award_ids(text: str) -> list[str]:
-    s = normalize_dashes(text)
+    s = _normalize_anr(text)
     seen: set[str] = set()
     results: list[str] = []
     for m in _ANR_WITH_PREFIX_RE.finditer(s):
-        val = m.group(0).upper()
+        val = _normalize_anr_code(m.group(0).upper())
         if val not in seen:
             seen.add(val)
             results.append(val)
     for m in _ANR_NO_PREFIX_RE.finditer(s):
-        val = "ANR-" + m.group(0).upper()
+        val = _normalize_anr_code("ANR-" + m.group(0).upper())
         if val not in seen:
             seen.add(val)
             results.append(val)
@@ -261,12 +278,25 @@ EXAMPLES = FunderExamples(
         "10-INBS-09-08",
         "16-IDEX-0004",
         "20-PCPA-0010",
+        # Interleaved-digit programme codes (P3IA, CHIA, IAS1, FAI1).
+        "ANR-19-P3IA-0001",
+        "ANR-20-CHIA-0014",
+        "ANR-22-FAI1-0003",
+        # Underscore-name suffix after project number — lookahead allows the match.
+        "ANR-10-LABX-0036_NETRN",
+        # Missing hyphens after ANR — normalized before matching.
+        "ANR21-CE06-0029",
+        # Abbreviation variants normalized to canonical CSV form.
+        "ANR-10-LBX-0038",
+        "ANR-10-LABEX-0025",
     ),
     not_found_awards=(
         # CE99 is not a real ANR programme code.
         "ANR-24-CE99-9999",
         # FAUX is not a real ANR programme code.
         "ANR-22-FAUX-0001",
+        # Valid P3IA format but non-existent serial.
+        "ANR-19-P3IA-9999",
     ),
     rejected_ids=(
         # Acronym-only references — not resolvable as ANR IDs.
