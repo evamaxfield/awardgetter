@@ -150,6 +150,24 @@ awardgetter-preprocess-cordis <path-to-cordis-json-ld-directory>
 
 This places `cordis_projects.parquet` in the cache directory.
 
+## Performance
+
+Out of a sample of 4000 Award IDs, `awardgetter` was able to find the funded amount, and the start and end dates for ~75% of them.
+
+| Funder | Total | Found | Success % |
+|---|---|---|---|
+| `nsf` | 1368 | 1229 | 89.8 |
+| `snsf` | 157 | 129 | 82.2 |
+| `anr` | 176 | 137 | 77.8 |
+| `epsrc_ukri` | 177 | 134 | 75.7 |
+| `nih` | 1155 | 772 | 66.8 |
+| `ec_cordis` | 220 | 136 | 61.8 |
+| `dfg` | 382 | 236 | 61.8 |
+| `jsps_kakenhi` | 217 | 124 | 57.1 |
+| `doe` | 148 | 83 | 56.1 |
+
+_Awards requested with `awardgetter` were specifically those that OpenAlex didn't have the funded amount or start and date information for already._
+
 ## Development
 
 ```bash
