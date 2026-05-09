@@ -30,6 +30,34 @@ _USER_AGENT = (
 )
 
 
+def _collect_xlsx_links(driver: object) -> list[tuple[str, str]]:
+    from selenium.webdriver.common.by import By
+
+    all_anchors = driver.find_elements(By.TAG_NAME, "a")  # type: ignore[attr-defined]
+    xlsx_anchors = [
+        a for a in all_anchors if a.get_attribute("data-file-extension") == "xlsx"
+    ]
+    if not xlsx_anchors:
+        xlsx_anchors = [
+            a for a in all_anchors if "xlsx" in (a.get_attribute("href") or "").lower()
+        ]
+
+    items: list[tuple[str, str]] = []
+    seen_hrefs: set[str] = set()
+    for link in xlsx_anchors:
+        href = link.get_attribute("href") or ""
+        if not href:
+            continue
+        if not href.startswith("http"):
+            href = _NHMRC_BASE_URL + href
+        if href in seen_hrefs:
+            continue
+        seen_hrefs.add(href)
+        data_name = link.get_attribute("data-file-name") or ""
+        items.append((href, data_name))
+    return items
+
+
 @app.command()
 def fetch_nhmrc(
     out_dir: Annotated[
@@ -53,15 +81,14 @@ def fetch_nhmrc(
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         from selenium.webdriver.common.by import By
-        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.support import expected_conditions as ec
         from selenium.webdriver.support.ui import WebDriverWait
-    except ImportError:
+    except ImportError as err:
         typer.echo(
-            "Error: selenium is required. Install with:\n"
-            "  pip install 'awardgetter[nhmrc]'",
+            "Error: selenium is required. Install with: pip install 'awardgetter[nhmrc]'",
             err=True,
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from err
 
     _out_dir = Path(out_dir)
     _out_dir.mkdir(parents=True, exist_ok=True)
@@ -83,33 +110,10 @@ def fetch_nhmrc(
     )
     try:
         driver.get(_NHMRC_OUTCOMES_URL)
-        WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        WebDriverWait(driver, 30).until(ec.presence_of_element_located((By.TAG_NAME, "body")))
         time.sleep(8)
 
-        all_anchors = driver.find_elements(By.TAG_NAME, "a")
-
-        xlsx_anchors = [
-            a for a in all_anchors if a.get_attribute("data-file-extension") == "xlsx"
-        ]
-        if not xlsx_anchors:
-            # Fallback: any anchor whose resolved href contains 'xlsx'.
-            xlsx_anchors = [
-                a for a in all_anchors if "xlsx" in (a.get_attribute("href") or "").lower()
-            ]
-
-        items: list[tuple[str, str]] = []
-        seen_hrefs: set[str] = set()
-        for link in xlsx_anchors:
-            href = link.get_attribute("href") or ""
-            if not href:
-                continue
-            if not href.startswith("http"):
-                href = _NHMRC_BASE_URL + href
-            if href in seen_hrefs:
-                continue
-            seen_hrefs.add(href)
-            data_name = link.get_attribute("data-file-name") or ""
-            items.append((href, data_name))
+        items = _collect_xlsx_links(driver)
 
         # Capture browser cookies before closing — required for token download URLs.
         browser_cookies = {c["name"]: c["value"] for c in driver.get_cookies()}
@@ -117,7 +121,9 @@ def fetch_nhmrc(
         driver.quit()
 
     if not items:
-        typer.echo("No XLSX links found on page. The page structure may have changed.", err=True)
+        typer.echo(
+            "No XLSX links found on page. The page structure may have changed.", err=True
+        )
         raise typer.Exit(1)
 
     typer.echo(f"Found {len(items)} XLSX link(s).")

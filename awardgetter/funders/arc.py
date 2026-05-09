@@ -21,7 +21,8 @@ FUNDER_OPENALEX_ALTERNATE_IDS: tuple[str, ...] = ()
 # Two-letter program prefix + 9 digits.
 # Known prefixes: DP (Discovery Projects), DE (Discovery Early Career), FT (Future Fellowships),
 # FL (Laureate Fellowships), LP (Linkage Projects), CE (Centres of Excellence),
-# SR (Special Research Initiatives), IC (Industrial Transformation), GT (Grants to Institutions),
+# SR (Special Research Initiatives), IC (Industrial Transformation),
+# GT (Grants to Institutions),
 # IN (ITTC), LE (Linkage Infrastructure), CR (Collaborative Research Networks).
 _ARC_RE = re.compile(
     r"\b(?:DP|DE|FT|FL|LP|CE|SR|IC|GT|IN|LE|CR|MI)\d{7,9}\b",
