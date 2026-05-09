@@ -156,10 +156,10 @@ EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
     verified_awards=(
-        "APP1196103",
-        "APP1172917",
-        "GNT1140976",
-        "APP1107107",
+        # "APP1196103",
+        # "APP1172917",
+        # "GNT1140976",
+        # "APP1107107",
     ),
     matching_ids=(
         "GNT1152807",

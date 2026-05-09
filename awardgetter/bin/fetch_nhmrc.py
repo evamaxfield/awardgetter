@@ -34,9 +34,7 @@ def _collect_xlsx_links(driver: object) -> list[tuple[str, str]]:
     from selenium.webdriver.common.by import By
 
     all_anchors = driver.find_elements(By.TAG_NAME, "a")  # type: ignore[attr-defined]
-    xlsx_anchors = [
-        a for a in all_anchors if a.get_attribute("data-file-extension") == "xlsx"
-    ]
+    xlsx_anchors = [a for a in all_anchors if a.get_attribute("data-file-extension") == "xlsx"]
     if not xlsx_anchors:
         xlsx_anchors = [
             a for a in all_anchors if "xlsx" in (a.get_attribute("href") or "").lower()

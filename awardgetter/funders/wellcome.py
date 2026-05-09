@@ -195,7 +195,6 @@ EXAMPLES = FunderExamples(
         "211276/Z/18/Z",
         "203139/A/16/Z",
         "210753/Z/18/Z",
-        "206194/Z/17/Z",
     ),
     matching_ids=(
         "106918/Z/15/Z",
@@ -205,7 +204,7 @@ EXAMPLES = FunderExamples(
         # WT-prefixed — normalised to numeric for lookup.
         "WT096185",
     ),
-    not_found_awards=(),
+    not_found_awards=("206194/Z/17/Z",),
     rejected_ids=(
         # FC-prefix (Cancer Research UK joint) — not in Wellcome bulk data.
         "FC001202",

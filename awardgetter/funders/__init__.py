@@ -53,5 +53,5 @@ ALL_DETAIL_FUNDERS: tuple[FunderModule, ...] = (
     onr,
     arc,
     wellcome,
-    nhmrc,
+    # nhmrc,
 )
