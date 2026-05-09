@@ -28,6 +28,7 @@ classifiers = [
 dynamic = ["version"]
 dependencies = [
   "beautifulsoup4>=4",
+  "fastexcel>=0.7",
   "python-dotenv>=1,<2",
   "polars>=1",
   "requests>=2",
@@ -42,6 +43,9 @@ dev = [
   "prek>=0.3",
   "pytest>=9",
 ]
+nhmrc = [
+  "selenium>=4.6",
+]
 
 [project.urls]
 Homepage = "https://github.com/evamaxfield/awardgetter"
@@ -53,6 +57,7 @@ Documentation = "https://evamaxfield.github.io/awardgetter"
 # https://peps.python.org/pep-0621/#entry-points
 [project.scripts]
 awardgetter-preprocess-cordis = "awardgetter.bin.preprocess_cordis:main"
+awardgetter-fetch-nhmrc = "awardgetter.bin.fetch_nhmrc:main"
 
 # build settings
 # https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html

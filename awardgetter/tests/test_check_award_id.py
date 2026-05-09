@@ -11,23 +11,45 @@ import pytest
 from awardgetter._spec import ExtractionExample, FunderModule
 from awardgetter.funders import (
     anr,
+    arc,
     dfg,
     doe,
     ec_cordis,
     epsrc_ukri,
     jsps_kakenhi,
+    nasa,
+    nhmrc,
     nih,
     nkrdp,
     nsf,
     nsfc,
+    onr,
     snsf,
+    wellcome,
 )
 
 from .examples import FUNDER_EXAMPLES
 
 FUNDER_MODULES: dict[str, FunderModule] = {
     m.FUNDER_ID: m
-    for m in (anr, dfg, doe, ec_cordis, epsrc_ukri, jsps_kakenhi, nih, nkrdp, nsf, nsfc, snsf)
+    for m in (
+        anr,
+        arc,
+        dfg,
+        doe,
+        ec_cordis,
+        epsrc_ukri,
+        jsps_kakenhi,
+        nasa,
+        nih,
+        nhmrc,
+        nkrdp,
+        nsf,
+        nsfc,
+        onr,
+        snsf,
+        wellcome,
+    )
 }
 
 

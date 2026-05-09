@@ -207,7 +207,6 @@ def get_award_details(
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="plans/epsrc_gtr_spec.md",
     verified_awards=(
         # Standard EPSRC/UKRI references confirmed via GtR API.
         "EP/I013067/1",

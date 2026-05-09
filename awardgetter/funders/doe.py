@@ -1,15 +1,14 @@
 """Funder matcher for the U.S. Department of Energy (DOE)."""
 
 import re
-import time
-from datetime import datetime
 from pathlib import Path
 
 import requests
 
-from .._award import AwardDetails, AwardDetailsResult, AwardNotFound, NotFoundReason
+from .._award import AwardDetailsResult, AwardNotFound, NotFoundReason
 from .._spec import ExtractionExample, FunderExamples
 from .._text_cleaning import normalize_dashes
+from ._usaspending import query_usaspending
 
 FUNDER_ID: str = "doe"
 FUNDER_DISPLAY_NAME: str = "U.S. Department of Energy"
@@ -47,12 +46,6 @@ _DOE_INTERNAL_SPACE_RE = re.compile(r"\b(DE-?[A-Z]{2}-?) (\d)", re.IGNORECASE)
 # These are lab-wide umbrella contracts, not individual research grants.
 _DOE_MO_RE = re.compile(r"^DE-AC\d{2}-\d{2}[A-Z]{2}\d+$")
 
-_USASPENDING_SEARCH_URL = "https://api.usaspending.gov/api/v2/search/spending_by_award/"
-_USASPENDING_FIELDS = ["Award ID", "Award Amount", "Start Date", "End Date"]
-# Assistance award type codes (grants and cooperative agreements).
-# award_type_codes is now a required filter field in the USASpending API.
-_DOE_AWARD_TYPE_CODES = ["02", "03", "04", "05"]
-
 # OSTI public records API — no auth required. Used to confirm pre-2007 grants exist
 # when USASpending has no record of them.
 _OSTI_RECORDS_URL = "https://www.osti.gov/api/v1/records"
@@ -73,15 +66,6 @@ def _osti_confirms_pre2007(award_id: str) -> bool:
         return bool(resp.ok and records)
     except requests.exceptions.RequestException:
         return False
-
-
-def _parse_doe_date(s: str | None):
-    if not s:
-        return None
-    try:
-        return datetime.strptime(s, "%Y-%m-%d").date()
-    except ValueError:
-        return None
 
 
 def _normalize_doe(text: str) -> str:
@@ -130,12 +114,12 @@ def get_award_details(
     cache_dir: Path,
     force_refresh: bool,
 ) -> AwardDetailsResult:
-    found: list[AwardDetails] = []
-    not_found: list[AwardNotFound] = []
-
+    # Pre-filter M&O contracts — they match the regex but are not individual grants.
+    to_query: list[str] = []
+    pre_not_found: list[AwardNotFound] = []
     for award_id in award_ids:
         if _DOE_MO_RE.match(award_id):
-            not_found.append(
+            pre_not_found.append(
                 AwardNotFound(
                     funder_id=FUNDER_ID,
                     input_text=award_id,
@@ -143,105 +127,43 @@ def get_award_details(
                     detail="M&O contract (lab-wide umbrella contract, not an individual grant)",
                 )
             )
-            continue
+        else:
+            to_query.append(award_id)
 
-        # USASpending stores FAINs without hyphens (DE-SC0021358 → DESC0021358).
-        fain = award_id.replace("-", "")
-        try:
-            resp = requests.post(
-                _USASPENDING_SEARCH_URL,
-                json={
-                    "subawards": False,
-                    "limit": 1,
-                    "fields": _USASPENDING_FIELDS,
-                    "filters": {
-                        "award_ids": [fain],
-                        "award_type_codes": _DOE_AWARD_TYPE_CODES,
-                    },
-                },
-                timeout=10,
-            )
-        except requests.exceptions.RequestException as exc:
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.API_ERROR,
-                    detail=str(exc),
-                )
-            )
-            continue
+    result = query_usaspending(to_query, FUNDER_ID)
 
-        if resp.status_code == 429:
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.RATE_LIMITED,
-                    detail="HTTP 429",
+    # For pre-2007 grants not found in USASpending, check OSTI and adjust detail.
+    updated_not_found: list[AwardNotFound] = list(pre_not_found)
+    for nf in result.not_found:
+        if nf.reason == NotFoundReason.NOT_FOUND and _DOE_PRE2007_RE.match(nf.input_text):
+            if _osti_confirms_pre2007(nf.input_text):
+                updated_not_found.append(
+                    AwardNotFound(
+                        funder_id=FUNDER_ID,
+                        input_text=nf.input_text,
+                        reason=NotFoundReason.NOT_FOUND,
+                        detail="Pre-2007 grant confirmed in OSTI"
+                        " (financial data not available via public APIs)",
+                    )
                 )
-            )
-            continue
-
-        if not resp.ok:
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.API_ERROR,
-                    detail=f"HTTP {resp.status_code}",
-                )
-            )
-            continue
-
-        results = resp.json().get("results") or []
-        if not results:
-            if _DOE_PRE2007_RE.match(award_id) and _osti_confirms_pre2007(award_id):
-                detail = (
-                    "Pre-2007 grant confirmed in OSTI"
-                    " (financial data not available via public APIs)"
-                )
-            elif _DOE_PRE2007_RE.match(award_id):
-                detail = "Not found in USASpending or OSTI"
             else:
-                detail = "Not found in USASpending"
-            not_found.append(
-                AwardNotFound(
-                    funder_id=FUNDER_ID,
-                    input_text=award_id,
-                    reason=NotFoundReason.NOT_FOUND,
-                    detail=detail,
+                updated_not_found.append(
+                    AwardNotFound(
+                        funder_id=FUNDER_ID,
+                        input_text=nf.input_text,
+                        reason=NotFoundReason.NOT_FOUND,
+                        detail="Not found in USASpending or OSTI",
+                    )
                 )
-            )
-            continue
+        else:
+            updated_not_found.append(nf)
 
-        row = results[0]
-        amount_raw = row.get("Award Amount")
-        try:
-            amount = float(amount_raw) if amount_raw is not None else None
-        except (ValueError, TypeError):
-            amount = None
-
-        found.append(
-            AwardDetails(
-                funder_id=FUNDER_ID,
-                award_id=award_id,
-                amount_funded=amount,
-                currency="USD",
-                start_date=_parse_doe_date(row.get("Start Date")),
-                end_date=_parse_doe_date(row.get("End Date")),
-            )
-        )
-
-        time.sleep(0.5)
-
-    return AwardDetailsResult(found=found, not_found=not_found)
+    return AwardDetailsResult(found=result.found, not_found=updated_not_found)
 
 
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="plans/doe_spec.md",
     verified_awards=(
         # Post-2007 Office of Science grants — confirmed via USASpending search.
         "DE-SC0021358",

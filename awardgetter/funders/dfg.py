@@ -385,7 +385,6 @@ def get_award_details(
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="plans/dfg_gepris_spec.md",
     verified_awards=(
         # Strings with embedded GEPRIS numeric project IDs — resolvable via direct page fetch.
         "SFB1423 / 421152132 - A07",

@@ -163,7 +163,6 @@ def get_award_details(
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="plans/jsps_kakenhi_spec.md",
     verified_awards=("22H00521",),
     matching_ids=(
         # Standard `YY` + letter code + 5-digit serial.

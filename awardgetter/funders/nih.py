@@ -347,7 +347,6 @@ def get_award_details(
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="awardgetter/funders/nih.py (no plan file)",
     verified_awards=(
         # Canonical project numbers confirmed via NIH RePORTER.
         "U24NS124001",

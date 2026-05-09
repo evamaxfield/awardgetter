@@ -25,7 +25,6 @@ class FunderExamples:
 
     funder_id: str
     display_name: str
-    source: str
     verified_awards: tuple[str, ...]
     matching_ids: tuple[str, ...]
     not_found_awards: tuple[str, ...]

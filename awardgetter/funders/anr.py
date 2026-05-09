@@ -253,7 +253,6 @@ def get_award_details(
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="plans/anr_spec.md",
     verified_awards=(
         # Standard ANR competitive grants (DGDS) — confirmed in ANR bulk CSV.
         "ANR-21-CE29-0003",

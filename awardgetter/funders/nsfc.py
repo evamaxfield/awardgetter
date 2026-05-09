@@ -44,19 +44,17 @@ def get_award_details(
 ) -> AwardDetailsResult:
     # Not implemented: the primary source (kd.nsfc.gov.cn) is DNS-unreachable
     # outside China, and third-party aggregators that do expose an API require
-    # paid subscriptions. See plans/nsfc_scraper_spec.md for investigation notes.
+    # paid subscriptions.
     raise NotImplementedError(
         "NSFC get_award_details is not implemented. "
         "The primary portal (kd.nsfc.gov.cn) is inaccessible outside China "
-        "and no publicly usable API has been found. "
-        "See plans/nsfc_scraper_spec.md."
+        "and no publicly usable API has been found."
     )
 
 
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="plans/nsfc_scraper_spec.md",
     verified_awards=(),
     matching_ids=(
         # Standard 8-digit NSFC numbers.

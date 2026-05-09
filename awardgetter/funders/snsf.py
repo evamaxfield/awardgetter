@@ -240,7 +240,6 @@ def get_award_details(
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="plans/snsf_spec.md",
     verified_awards=(
         # Programme-prefixed grant numbers confirmed in SNSF bulk CSV.
         "PZ00P3_180085",

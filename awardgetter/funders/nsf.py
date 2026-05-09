@@ -132,7 +132,6 @@ def get_award_details(
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="awardgetter/funders/nsf.py (no plan file)",
     verified_awards=(
         # Bare 7-digit NSF award IDs confirmed via NSF API.
         "1728743",

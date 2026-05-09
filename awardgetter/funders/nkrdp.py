@@ -43,19 +43,16 @@ def get_award_details(
     # Not implemented: the official MoST portal (service.most.gov.cn) requires
     # authentication for project detail lookups, and the third-party aggregator
     # (funresearch.cn) that indexes NKRDP data requires a paid subscription.
-    # See plans/nkrdp_spec.md for investigation notes.
     raise NotImplementedError(
         "NKRDP get_award_details is not implemented. "
         "The official MoST portal (service.most.gov.cn) requires login, "
-        "and no publicly accessible API has been found. "
-        "See plans/nkrdp_spec.md."
+        "and no publicly accessible API has been found."
     )
 
 
 EXAMPLES = FunderExamples(
     funder_id=FUNDER_ID,
     display_name=FUNDER_DISPLAY_NAME,
-    source="plans/nkrdp_spec.md",
     verified_awards=(),
     matching_ids=(
         # Sub-project (15-char) IDs.

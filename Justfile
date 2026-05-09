@@ -23,7 +23,7 @@ clean:
 # install with all deps
 install:
 	pip install uv
-	uv pip install -e ".[dev]"
+	uv pip install -e ".[dev,nhmrc]"
 
 # run linting
 lint:
