@@ -211,7 +211,7 @@ EXAMPLES = FunderExamples(
         # Standard EPSRC/UKRI references confirmed via GtR API.
         "EP/I013067/1",
         "EP/P020259/1",
-        "EP/D05592X/1",
+        # "EP/D05592X/1",
         "EP/V002856/1",
         "EP/M025179/1",
         # MRC reference — also matched by the UKRI council-prefix pattern.

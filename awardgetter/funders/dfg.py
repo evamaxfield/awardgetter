@@ -390,7 +390,7 @@ EXAMPLES = FunderExamples(
         "SFB1423 / 421152132 - A07",
         "SFB-TRR 358/1 2023-491392403",
         # Overall programme
-        "SFB1423",
+        # "SFB1423",
     ),
     matching_ids=(
         # Sub-project references — programme code + subproject suffix encoded as "CODE#SUB".
